@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE DASHBOARD ---
 st.set_page_config(page_title="MAESTRO Omikron Suite", layout="wide")
-st.title("🛡️ MAESTRO: Omikron Intelligence Suite")
+st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 # --- CONNESSIONE DATABASE ---
 URL = "https://zwpahhbxcugldxchiunv.supabase.co"
@@ -159,6 +159,7 @@ if not filtered_df.empty:
     st.plotly_chart(fig_network, use_container_width=True)
 else:
     st.warning("⚠️ Nessun target corrisponde ai filtri selezionati. Regola gli slider per visualizzare la rete.")
+
 
 
 
