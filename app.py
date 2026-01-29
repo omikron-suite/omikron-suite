@@ -1,4 +1,39 @@
 import streamlit as st
+# ... gli altri import rimangono uguali ...
+
+def check_password():
+    """Restituisce True se l'utente ha inserito la password corretta."""
+    def password_entered():
+        if st.session_state["password"] == st.secrets["password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Rimuove la password dalla memoria
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # Visualizza l'input per la password
+        st.text_input("Inserisci la chiave d'accesso per Omikron Orchestra", 
+                     type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password errata
+        st.text_input("Password errata. Riprova:", 
+                     type="password", on_change=password_entered, key="password")
+        st.error("😕 Accesso negato")
+        return False
+    else:
+        # Password corretta
+        return True
+
+if not check_password():
+    st.stop()  # Ferma l'esecuzione se la password non è corretta
+
+# --- DA QUI IN POI IL TUO CODICE ESISTENTE ---
+# st.set_page_config(...) ecc.
+
+
+
+import streamlit as st
 from supabase import create_client
 import pandas as pd
 import plotly.express as px
@@ -159,6 +194,7 @@ if not filtered_df.empty:
     st.plotly_chart(fig_network, use_container_width=True)
 else:
     st.warning("⚠️ Nessun target corrisponde ai filtri selezionati. Regola gli slider per visualizzare la rete.")
+
 
 
 
