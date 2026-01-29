@@ -32,22 +32,22 @@ max_tox = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
 
 
 
-# --- FUNZIONE DI RICERCA AXON ---
+# --- RICERCA POTENZIATA ---
 st.sidebar.divider()
-search_query = st.sidebar.text_input("🔍 Cerca Target Specifico (es. OMI-ALPHA)", "").upper()
+search_query = st.sidebar.text_input("🔍 Cerca Target Specifico", "").strip()
 
 if search_query:
-    # Filtriamo il dataframe in base alla ricerca
-    search_results = df[df['target_id'].str.contains(search_query, na=False)]
+    # Cerchiamo in modo "case-insensitive" (ignora maiuscole/minuscole)
+    # e rimuoviamo eventuali spazi vuoti
+    filtered_df = df[df['target_id'].str.contains(search_query, case=False, na=False)]
     
-    if not search_results.empty:
-        st.sidebar.success(f"Trovato: {search_query}")
-        # Mostriamo una scheda tecnica rapida nella sidebar
-        res = search_results.iloc[0]
-        st.sidebar.metric("Signal Score", f"{res['initial_score']:.2f}")
-        st.sidebar.metric("Toxicity (TMI)", f"{res['toxicity_index']:.2f}", delta_color="inverse")
+    if filtered_df.empty:
+        st.sidebar.warning(f"Nessun risultato per '{search_query}'")
     else:
-        st.sidebar.error("Target non trovato nel database.")
+        st.sidebar.success(f"Trovati {len(filtered_df)} match!")
+else:
+    # Se la ricerca è vuota, usa i filtri degli slider
+    filtered_df = df[(df['initial_score'] >= min_signal) & (df['toxicity_index'] <= max_tox)]
 
 
 
@@ -135,4 +135,5 @@ if not filtered_df.empty:
     st.plotly_chart(fig_network, use_container_width=True)
 else:
     st.warning("⚠️ Nessun target corrisponde ai filtri selezionati. Regola gli slider per visualizzare la rete.")
+
 
