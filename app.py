@@ -51,8 +51,32 @@ else:
 
 
 
+
+
 # Filtro dinamico
 #filtered_df = df[(df['initial_score'] >= min_signal) & (df['toxicity_index'] <= max_tox)]
+
+
+
+# --- TASTO EXPORT REPORT ---
+st.sidebar.divider()
+st.sidebar.subheader("💾 Backup & Report")
+
+# Trasforma il dataframe filtrato in CSV
+csv = filtered_df.to_csv(index=False).encode('utf-8')
+
+st.sidebar.download_button(
+    label="📥 Scarica Report AXON (CSV)",
+    data=csv,
+    file_name='omikron_suite_report.csv',
+    mime='text/csv',
+    help="Scarica i dati attualmente visualizzati in formato Excel/CSV"
+)
+
+
+
+
+
 
 # --- LAYOUT PRINCIPALE ---
 col1, col2 = st.columns([2, 1])
@@ -135,6 +159,7 @@ if not filtered_df.empty:
     st.plotly_chart(fig_network, use_container_width=True)
 else:
     st.warning("⚠️ Nessun target corrisponde ai filtri selezionati. Regola gli slider per visualizzare la rete.")
+
 
 
 
