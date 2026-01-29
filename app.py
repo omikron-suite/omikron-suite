@@ -52,4 +52,68 @@ with col2:
 st.divider()
 st.subheader("🕸️ Network Interaction Map (AXON Web)")
 # Qui il codice per la ragnatela che abbiamo testato su Colab
+
 # ... (lo caricheremo nel file completo su GitHub)
+
+# --- AGGIUNTA SOTTO IL CODICE ESISTENTE IN app.py ---
+
+st.divider()
+st.subheader("🕸️ Network Interaction Map (AXON Web)")
+
+# Creazione del grafo con NetworkX
+G = nx.Graph()
+
+# Creiamo connessioni simulate basate sulla categoria (o puoi usare dati reali)
+for i, row in filtered_df.iterrows():
+    G.add_node(row['target_id'], size=row['initial_score']*20, color=row['toxicity_index'])
+    # Colleghiamo i target con punteggi simili per creare la rete
+    for j, other_row in filtered_df.head(10).iterrows():
+        if row['target_id'] != other_row['target_id'] and abs(row['ces_score'] - other_row['ces_score']) < 0.1:
+            G.add_edge(row['target_id'], other_row['target_id'])
+
+# Posizionamento dei nodi
+pos = nx.spring_layout(G, k=0.5, iterations=50)
+
+# Creazione dei tracciati per Plotly
+edge_x = []
+edge_y = []
+for edge in G.edges():
+    x0, y0 = pos[edge[0]]
+    x1, y1 = pos[edge[1]]
+    edge_x.extend([x0, x1, None])
+    edge_y.extend([y0, y1, None])
+
+edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=0.5, color='#888'), hoverinfo='none', mode='lines')
+
+node_x = []
+node_y = []
+for node in G.nodes():
+    x, y = pos[node]
+    node_x.append(x)
+    node_y.append(y)
+
+node_trace = go.Scatter(
+    x=node_x, y=node_y, mode='markers+text', text=[n for n in G.nodes()],
+    textposition="bottom center", hoverinfo='text',
+    marker=dict(
+        showscale=True, colorscale='RdYlGn_r', reversescale=False, color=[],
+        size=[G.nodes[n]['size'] for n in G.nodes()],
+        colorbar=dict(thickness=15, title='Rischio TMI', xanchor='left', titleside='right')
+    )
+)
+
+# Colorazione nodi in base alla tossicità
+node_colors = [G.nodes[n]['color'] for n in G.nodes()]
+node_trace.marker.color = node_colors
+
+# Creazione Figura Finale
+fig_network = go.Figure(data=[edge_trace, node_trace],
+             layout=go.Layout(
+                showlegend=False, hovermode='closest',
+                margin=dict(b=0, l=0, r=0, t=0),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+            )
+
+st.plotly_chart(fig_network, use_container_width=True)
