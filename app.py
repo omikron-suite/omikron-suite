@@ -52,7 +52,7 @@ else:
 
 
 # Filtro dinamico
-filtered_df = df[(df['initial_score'] >= min_signal) & (df['toxicity_index'] <= max_tox)]
+#filtered_df = df[(df['initial_score'] >= min_signal) & (df['toxicity_index'] <= max_tox)]
 
 # --- LAYOUT PRINCIPALE ---
 col1, col2 = st.columns([2, 1])
@@ -135,5 +135,6 @@ if not filtered_df.empty:
     st.plotly_chart(fig_network, use_container_width=True)
 else:
     st.warning("⚠️ Nessun target corrisponde ai filtri selezionati. Regola gli slider per visualizzare la rete.")
+
 
 
