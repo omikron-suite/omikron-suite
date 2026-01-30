@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 from supabase import create_client
+import plotly.express as px
+import networkx as nx
+import plotly.graph_objects as go
 
-# --- 1. CONFIGURAZIONE ---
+# --- 1. CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Omikron Orchestra Suite", layout="wide")
 
 # --- 2. PASSWORD ---
@@ -24,52 +27,108 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 3. CONNESSIONE ---
+# --- 3. CONNESSIONE SUPABASE ---
 URL = "https://zwpahhbxcugldxchiunv.supabase.co"
 KEY = "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1"
 supabase = create_client(URL, KEY)
 
-# --- 4. LOGICA DASHBOARD ---
-st.title("🛡️ Omikron Orchestra Suite")
-search_query = st.sidebar.text_input("🔍 Cerca Biomarker (es. HER2)", "").strip()
+@st.cache_data(ttl=600)
+def load_axon_data():
+    res = supabase.table("axon_knowledge").select("*").execute()
+    df = pd.DataFrame(res.data)
+    df['ces_score'] = df['initial_score'] * (1 - df['toxicity_index'])
+    return df
 
-# --- 5. SEZIONE CLINICA (GCI) ---
+df = load_axon_data()
+
+# --- 4. SIDEBAR & FILTRI ---
+st.title("🛡️ Omikron Orchestra Suite")
+st.sidebar.header("Parametri VTG Gate")
+min_sig = st.sidebar.slider("Soglia Minima Segnale", 0.0, 3.0, 0.8)
+max_tox = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
+search_query = st.sidebar.text_input("🔍 Cerca Target Specifico (es. HER2)", "").strip()
+
+if search_query:
+    filtered_df = df[df['target_id'].str.contains(search_query, case=False, na=False)]
+else:
+    filtered_df = df[(df['initial_score'] >= min_sig) & (df['toxicity_index'] <= max_tox)]
+
+# --- 5. ANALISI GRAFICA (AXON) ---
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("Analisi Efficacia vs Tossicità")
+    fig = px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index",
+                 color_continuous_scale="RdYlGn_r", template="plotly_dark")
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    st.subheader("🥇 Top Target (Efficiency)")
+    top_5 = filtered_df.sort_values('ces_score', ascending=False).head(5)
+    st.dataframe(top_5[['target_id', 'ces_score']], use_container_width=True)
+
+# --- 6. RAGNATELA (AXON Web) ---
+st.divider()
+st.subheader("🕸️ Network Interaction Map (AXON Web)")
+
+if not filtered_df.empty:
+    G = nx.Graph()
+    for _, row in filtered_df.iterrows():
+        G.add_node(row['target_id'], size=float(row['initial_score'])*20, color=float(row['toxicity_index']))
+    
+    nodes = list(G.nodes())
+    for i in range(len(nodes)):
+        for j in range(i + 1, min(i + 5, len(nodes))):
+            G.add_edge(nodes[i], nodes[j])
+
+    pos = nx.spring_layout(G, k=0.5)
+    edge_x, edge_y = [], []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]; x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
+    
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=0.5, color='#888'), mode='lines', hoverinfo='none')
+    node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x); node_y.append(y); node_text.append(node)
+        node_color.append(G.nodes[node]['color']); node_size.append(G.nodes[node]['size'])
+
+    node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=node_text, textposition="bottom center",
+                            marker=dict(showscale=True, colorscale='RdYlGn_r', color=node_color, size=node_size))
+
+    fig_net = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
+                                                                       paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'))
+    st.plotly_chart(fig_net, use_container_width=True)
+
+# --- 7. INTEGRAZIONE CLINICA (GCI DATABASE) ---
 st.divider()
 st.header("🧪 Clinical Evidence Portal (GCI)")
 
 if search_query:
     try:
-        # Recuperiamo i dati
-        res = supabase.table("clinical_trials").select("*").execute()
-        gci_df = pd.DataFrame(res.data)
-
+        # Recupero dinamico per evitare errori di colonne
+        res_gci = supabase.table("clinical_trials").select("*").execute()
+        gci_df = pd.DataFrame(res_gci.data)
+        
         if not gci_df.empty:
-            # AUTO-ISPEZIONE DELLE COLONNE
-            # Cerchiamo la colonna giusta anche se Supabase ha cambiato i nomi in minuscolo
-            col_biomarker = next((c for c in gci_df.columns if c.lower() == 'primary_biomarker'), None)
+            # Troviamo la colonna Primary_Biomarker (case-insensitive)
+            col_target = next((c for c in gci_df.columns if c.lower() == 'primary_biomarker'), None)
             
-            if col_biomarker:
-                # Filtriamo i dati in locale per massima precisione
-                trials = gci_df[gci_df[col_biomarker].str.contains(search_query, case=False, na=False)]
+            if col_target:
+                trials = gci_df[gci_df[col_target].str.contains(search_query, case=False, na=False)]
                 
                 if not trials.empty:
-                    st.success(f"Trovate {len(trials)} evidenze per '{search_query}'")
-                    
-                    # Visualizzazione Tabella con le colonne disponibili
-                    cols_interessanti = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
-                    cols_presenti = [c for c in trials.columns if c in cols_interessanti or c.lower() in [x.lower() for x in cols_interessanti]]
-                    
-                    st.dataframe(trials[cols_presenti], use_container_width=True)
+                    st.success(f"Trovate {len(trials)} evidenze cliniche per '{search_query}'")
+                    cols_to_show = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
+                    # Filtriamo solo le colonne che esistono davvero
+                    actual_cols = [c for c in trials.columns if c in cols_to_show]
+                    st.dataframe(trials[actual_cols], use_container_width=True)
                 else:
-                    st.warning(f"Nessun match per '{search_query}' nella colonna {col_biomarker}.")
-                    with st.expander("Controlla i nomi presenti nel Database"):
-                        st.write(gci_df[col_biomarker].unique()[:20]) # Mostra i primi 20 per debug
+                    st.warning(f"Nessun dato clinico GCI per '{search_query}'.")
             else:
-                st.error(f"Errore: Non trovo la colonna 'Primary_Biomarker'. Colonne trovate: {list(gci_df.columns)}")
-        else:
-            st.error("La tabella 'clinical_trials' è vuota su Supabase.")
-            
+                st.error("Colonna 'Primary_Biomarker' non trovata nel database GCI.")
     except Exception as e:
-        st.error(f"Errore di connessione: {e}")
+        st.error(f"Errore caricamento dati clinici: {e}")
 else:
-    st.info("Digita un biomarker nella sidebar per vedere i trial clinici.")
+    st.info("💡 Cerca un biomarker nella sidebar per vedere i dati clinici correlati.")
