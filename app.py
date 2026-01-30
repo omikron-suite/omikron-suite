@@ -17,19 +17,12 @@ def load_axon():
         res = supabase.table("axon_knowledge").select("target_id,initial_score,toxicity_index").execute()
         data = res.data or []
         d = pd.DataFrame(data)
-        if d.empty:
-            return d
-
-        # Normalizzazione
+        if d.empty: return d
         d["target_id"] = d["target_id"].astype(str).str.strip().str.upper()
-
-        # Cast numerico robusto
         d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
         d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0).clip(0.0, 1.0)
-
         d["ces_score"] = d["initial_score"] * (1.0 - d["toxicity_index"])
         return d
-
     except Exception as e:
         return pd.DataFrame({"error": [str(e)]})
 
@@ -38,15 +31,10 @@ df = load_axon()
 # --- SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Omikron Control Center")
-
 min_sig = st.sidebar.slider("Soglia Minima Segnale (VTG)", 0.0, 3.0, 0.8)
 max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
-
 st.sidebar.divider()
-st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
-search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS")
-search_query = (search_query or "").strip().upper()
-
+search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS").strip().upper()
 st.sidebar.warning("⚠️ **Research Use Only**")
 
 # --- DATA PORTALS ---
@@ -56,22 +44,14 @@ if search_query and not df.empty:
     try:
         res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
         gci_df = pd.DataFrame(res_gci.data or [])
-
         res_pmi = supabase.table("pmi_database").select("*").ilike("Key_Targets", f"%{search_query}%").execute()
         pmi_df = pd.DataFrame(res_pmi.data or [])
-
         res_odi = supabase.table("odi_database").select("*").ilike("Targets", f"%{search_query}%").execute()
         odi_df = pd.DataFrame(res_odi.data or [])
     except Exception as e:
-        st.sidebar.error(f"Errore query Supabase: {e}")
+        st.sidebar.error(f"Errore query: {e}")
 
-# Filtro per grafico
-if search_query and not df.empty:
-    filtered_df = df[df["target_id"].str.contains(search_query, na=False)]
-else:
-    filtered_df = df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)] if not df.empty else df
-
-# --- UI ---
+# --- UI PRINCIPALE ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 if search_query and not df.empty:
@@ -79,7 +59,6 @@ if search_query and not df.empty:
     if not target_data.empty:
         row = target_data.iloc[0]
         st.markdown(f"## 🎼 Opera Director: {search_query}")
-
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("OMI (Biomarker)", "DETECTED")
         c2.metric("SMI (Pathway)", f"{len(pmi_df)} Linked")
@@ -94,78 +73,77 @@ if search_query and not df.empty:
         r2c5.metric("GCI", phase)
         st.divider()
 
-# --- LAYOUT PRINCIPALE: RAGNATELA (SINISTRA) | CARTELLE (DESTRA) ---
-main_col, data_col = st.columns([2, 1])
+# --- SEZIONE RAGNATELA (FULL WIDTH) ---
+st.subheader("🕸️ Network Interaction Map")
+filtered_df = df[df["target_id"].str.contains(search_query, na=False)] if search_query else df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)]
 
-with main_col:
-    st.subheader("🕸️ Network Interaction Map")
-    if not filtered_df.empty:
-        G = nx.Graph()
-        for _, r in filtered_df.iterrows():
-            tid = r["target_id"]
-            is_f = (tid == search_query)
-            G.add_node(tid, size=float(r["initial_score"]) * (50 if is_f else 30), color=float(r["toxicity_index"]))
+if not filtered_df.empty:
+    G = nx.Graph()
+    for _, r in filtered_df.iterrows():
+        tid = r["target_id"]
+        is_f = (tid == search_query)
+        G.add_node(tid, size=float(r["initial_score"]) * (50 if is_f else 30), color=float(r["toxicity_index"]))
 
-        nodes = list(G.nodes())
-        if search_query in nodes:
-            for n in nodes:
-                if n != search_query: G.add_edge(search_query, n)
-        elif len(nodes) > 1:
-            for i in range(len(nodes) - 1): G.add_edge(nodes[i], nodes[i + 1])
-
-        pos = nx.spring_layout(G, k=1.2, seed=42)
-        edge_x, edge_y = [], []
-        for a, b in G.edges():
-            x0, y0 = pos[a]; x1, y1 = pos[b]
-            edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
-
-        fig_net = go.Figure()
-        fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", hoverinfo="none", line=dict(color='#888', width=1)))
-        fig_net.add_trace(go.Scatter(
-            x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
-            mode="markers+text", text=nodes, textposition="top center",
-            marker=dict(size=[G.nodes[n]["size"] for n in nodes], color=[G.nodes[n]["color"] for n in nodes],
-                        colorscale="RdYlGn_r", showscale=True, line=dict(width=2))
-        ))
-        fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
-        st.plotly_chart(fig_net, use_container_width=True)
-    else:
-        st.info("Nessun risultato con i filtri attuali.")
-
-with data_col:
-    st.subheader("📁 Hub Intelligence")
+    nodes = list(G.nodes())
+    if search_query in nodes:
+        for n in nodes:
+            if n != search_query: G.add_edge(search_query, n)
     
-    # Cartella 1: Farmaci (ODI)
-    with st.expander("💊 Therapeutics (ODI)", expanded=True):
+    pos = nx.spring_layout(G, k=1.2, seed=42)
+    edge_x, edge_y = [], []
+    for a, b in G.edges():
+        x0, y0 = pos[a]; x1, y1 = pos[b]
+        edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
+
+    fig_net = go.Figure()
+    fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", hoverinfo="none", line=dict(color='#888', width=1)))
+    fig_net.add_trace(go.Scatter(
+        x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
+        mode="markers+text", text=nodes, textposition="top center",
+        marker=dict(size=[G.nodes[n]["size"] for n in nodes], color=[G.nodes[n]["color"] for n in nodes],
+                    colorscale="RdYlGn_r", showscale=True, line=dict(width=2, color='white'))
+    ))
+    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                          height=600)
+    st.plotly_chart(fig_net, use_container_width=True)
+else:
+    st.info("Nessun risultato con i filtri attuali.")
+
+# --- SEZIONE CARTELLE (SOTTO LA RAGNATELA) ---
+if search_query:
+    st.divider()
+    st.subheader(f"📂 Hub Intelligence: {search_query}")
+    
+    col_odi, col_pmi, col_gci = st.columns(3)
+
+    with col_odi:
+        st.markdown("### 💊 Therapeutics (ODI)")
         if not odi_df.empty:
             for _, r in odi_df.iterrows():
-                st.markdown(f"**{r.get('Generic_Name', 'N/D')}**")
-                st.caption(f"Class: {r.get('Drug_Class', 'N/D')}")
-                st.write(f"{r.get('Description_L0', 'Nessuna descrizione disponibile.')}")
-                st.divider()
-        else:
-            st.caption("Nessun farmaco correlato.")
+                with st.expander(f"**{r.get('Generic_Name', 'N/D')}**", expanded=True):
+                    st.caption(f"Class: {r.get('Drug_Class', 'N/D')}")
+                    st.write(r.get('Description_L0', 'Nessuna descrizione disponibile.'))
+                    st.divider()
+        else: st.caption("Nessun farmaco correlato.")
 
-    # Cartella 2: Pathways (PMI)
-    with st.expander("🧬 Pathways (PMI)", expanded=False):
+    with col_pmi:
+        st.markdown("### 🧬 Pathways (PMI)")
         if not pmi_df.empty:
             for _, r in pmi_df.iterrows():
-                st.markdown(f"**{r.get('Canonical_Name', 'N/D')}**")
-                st.write(f"{r.get('Description_L0', 'Nessuna descrizione disponibile.')}")
-                st.divider()
-        else:
-            st.caption("Nessun pathway correlato.")
+                with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**", expanded=True):
+                    st.write(r.get('Description_L0', 'Dati descrittivi non presenti.'))
+                    st.divider()
+        else: st.caption("Nessun pathway correlato.")
 
-    # Cartella 3: Trial Clinici (GCI)
-    with st.expander("🧪 Clinical Trials (GCI)", expanded=False):
+    with col_gci:
+        st.markdown("### 🧪 Clinical Trials (GCI)")
         if not gci_df.empty:
             for _, r in gci_df.iterrows():
-                st.markdown(f"**{r.get('NCT_Number', 'N/D')}**")
-                st.caption(f"Phase: {r.get('Phase', 'N/D')}")
-                st.write(f"{r.get('Canonical_Title', 'N/D')}")
-                st.divider()
-        else:
-            st.caption("Nessun trial correlato.")
+                with st.expander(f"Phase: {r.get('Phase', 'N/D')}", expanded=True):
+                    st.write(f"**Titolo:** {r.get('Canonical_Title', 'N/D')}")
+                    st.caption(f"NCT: {r.get('NCT_Number', 'N/D')}")
+                    st.divider()
+        else: st.caption("Nessun trial correlato.")
 
-st.caption("MAESTRO Suite | Integrated Build | RUO")
+st.caption("MAESTRO Suite | Bottom Intelligence Layout | RUO")
