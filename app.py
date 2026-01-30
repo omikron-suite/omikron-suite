@@ -51,47 +51,43 @@ if search_query and not df.empty:
 else:
     filtered_df = df[(df['initial_score'] >= min_sig) & (df['toxicity_index'] <= max_t)] if not df.empty else df
 
-# --- 5. DASHBOARD PRINCIPALE ---
-st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
-
-# --- IL CARTIGLIO DEI 9 DATABASE (L'ANALOGIA DEL MOTORE) ---
+# --- 5. OPERA DIRECTOR (INTELLIGENCE HUB) ---
 if search_query and not df.empty:
     target_data = df[df['target_id'].str.upper() == search_query]
     if not target_data.empty:
         row = target_data.iloc[0]
-        st.markdown(f"## 🏎️ Intelligence Mission Control: {search_query}")
         
-        # RIGA 1: MECCANICA (OMI, SMI, ODI)
-        st.markdown("### ⚙️ Il Motore (Molecolare)")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("OMI (Biomarcatori)", "Detected", help="Il Cruscotto: Presenza del biomarcatore")
-        c2.metric("SMI (Pathway)", "Active Hub", help="Gli Ingranaggi: Stato della segnalazione")
-        c3.metric("ODI (Farmaci)", "Targetable", help="Freno/Acceleratore: Disponibilità farmaci")
-
-        # RIGA 2: SICUREZZA (TMI, GNI, BCI)
-        st.markdown("### 🛡️ Telaio e Sicurezza")
-        c4, c5, c6 = st.columns(3)
-        tox_val = row['toxicity_index']
-        c4.metric("TMI (Tossicità)", "OK" if tox_val < 0.7 else "ALLARME", delta=f"{tox_val:.2f}", delta_color="inverse")
-        c5.metric("GNI (Genetica)", "Stable", help="Il Telaio: Genetica dell'ospite")
-        c6.metric("BCI (Bio-cost.)", "Optimal", help="L'Olio: Costituenti biologici")
-
-        # RIGA 3: AMBIENTE E STRADA (EVI, MBI, GCI)
-        st.markdown("### 🌍 Terreno e Prova su Strada")
-        c7, c8, c9 = st.columns(3)
-        c7.metric("EVI (Ambiente)", "Low Impact", help="Il Terreno: Tossici ambientali")
-        c8.metric("MBI (Microbiota)", "Resilient", help="Il Filtro Aria: Stato microbiota")
+        # Titolo della Sezione
+        st.markdown(f"## 🎼 Opera Director: {search_query}")
         
-        # Check GCI reale
-        res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
-        gci_df = pd.DataFrame(res_gci.data)
-        phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
-        c9.metric("GCI (Clinica)", phase, help="La Prova su Strada: Evidenza clinica")
+        # Prima riga: Il Cuore della Meccanica (5 colonne)
+        st.markdown("##### ⚙️ Meccanica & Sicurezza")
+        r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
+        r1_c1.metric("OMI (Biomarker)", "DETECTED")
+        r1_c2.metric("SMI (Pathway)", "ACTIVE")
+        r1_c3.metric("ODI (Drug)", "TARGETABLE")
+        r1_c4.metric("TMI (Tossicità)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
+        r1_c5.metric("CES (Efficiency)", f"{row['ces_score']:.2f}")
 
-        # TASTO REPORT
-        report_text = f"MAESTRO REPORT: {search_query}\nVTG: {row['initial_score']}\nTMI: {row['toxicity_index']}\nClinical: {phase}"
-        st.download_button("📥 Scarica Intelligence Report", report_text, file_name=f"Report_{search_query}.txt")
+        # Seconda riga: Il Contesto & Ambiente (5 colonne)
+        st.markdown("##### 🌍 Ambiente & Host")
+        r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
+        r2_c1.metric("BCI (Bio-cost.)", "OPTIMAL")
+        r2_c2.metric("GNI (Genetica)", "STABLE")
+        r2_c3.metric("EVI (Ambiente)", "LOW RISK")
+        r2_c4.metric("MBI (Microbiota)", "RESILIENT")
+        
+        # Check GCI reale per l'ultima casella
+        res_gci = supabase.table("GCI_clinical_trials").select("Phase").ilike("Primary_Biomarker", f"%{search_query}%").execute()
+        phase = res_gci.data[0]['Phase'] if res_gci.data else "PRE-CLIN"
+        r2_c5.metric("GCI (Clinica)", phase)
+
+        # Riga Report (Piccola e discreta)
+        st.write("")
+        report_text = f"OPERA DIRECTOR REPORT: {search_query}\nScore: {row['initial_score']}\nPhase: {phase}"
+        st.download_button("💾 Export Opera Data", report_text, file_name=f"Opera_{search_query}.txt", use_container_width=False)
         st.divider()
+
 
 # --- 6. GRAFICI AXON ---
 col_bar, col_rank = st.columns([2, 1])
@@ -145,3 +141,4 @@ if search_query and not gci_df.empty:
 # --- FOOTER ---
 st.divider()
 st.caption("Disclaimer: This platform is for research purposes only (RUO). Data provided by AXON and GCI are for scientific analysis.")
+
