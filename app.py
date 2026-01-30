@@ -203,6 +203,72 @@ else:
             full_report = f"MAESTRO v20.6 REPORT\nTarget: {search_query}\nDate: {datetime.now()}"
             st.download_button("📥 Export Full Intelligence (.txt)", full_report, file_name=f"MAESTRO_{search_query}.txt")
 
+# --- SEZIONE ESPORTAZIONE INTELLIGENCE COMPLETA ---
+            st.markdown("### 📥 Intelligence Export")
+            
+            # 1. Preparazione dei blocchi di dati
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Blocco Hub Core
+            df_hub_core = pd.DataFrame([{
+                "SECTION": "HUB_CORE_METRICS",
+                "Target_ID": search_query,
+                "VTG_Score": row['initial_score'],
+                "TMI_Index": row['toxicity_index'],
+                "CES_Score": row['ces_score'],
+                "Description": row.get('description_l0', ''),
+                "Export_Date": timestamp
+            }])
+
+            # Blocco Vicini (Neighbors)
+            neighbors_df["SECTION"] = "NETWORK_NEIGHBORS"
+            
+            # Blocco Farmaci (ODI)
+            if not odi_df.empty:
+                odi_export = odi_df.copy()
+                odi_export["SECTION"] = "THERAPEUTICS_ODI"
+            else:
+                odi_export = pd.DataFrame([{"SECTION": "THERAPEUTICS_ODI", "Status": "No data found"}])
+
+            # Blocco Trial (GCI)
+            if not gci_df.empty:
+                gci_export = gci_df.copy()
+                gci_export["SECTION"] = "CLINICAL_TRIALS_GCI"
+            else:
+                gci_export = pd.DataFrame([{"SECTION": "CLINICAL_TRIALS_GCI", "Status": "No data found"}])
+
+            # 2. Consolidamento in un unico buffer CSV
+            def create_full_report():
+                output = io.StringIO()
+                # Scrittura a blocchi con intestazioni chiare
+                output.write(f"MAESTRO INTELLIGENCE REPORT - HUB: {search_query}\n")
+                output.write(f"Generated: {timestamp}\n\n")
+                
+                output.write("--- 1. CORE METRICS ---\n")
+                df_hub_core.to_csv(output, index=False)
+                
+                output.write("\n--- 2. FIRST NEIGHBORS ---\n")
+                neighbors_df.to_csv(output, index=False)
+                
+                output.write("\n--- 3. ASSOCIATED THERAPEUTICS (ODI) ---\n")
+                odi_export.to_csv(output, index=False)
+                
+                output.write("\n--- 4. CLINICAL TRIALS (GCI) ---\n")
+                gci_export.to_csv(output, index=False)
+                
+                return output.getvalue()
+
+            # 3. Pulsante di download
+            full_report_data = create_full_report()
+            
+            st.download_button(
+                label="📊 Scarica Dossier Completo (.csv)",
+                data=full_report_data,
+                file_name=f"MAESTRO_Dossier_{search_query}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                help="Esporta tutti i dati AXON, i vicini di rete, i farmaci ODI e i trial GCI in un unico file strutturato."
+            )
+
 # --- 6. NETWORK MAP & RANKING ---
 st.divider()
 
@@ -374,6 +440,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
