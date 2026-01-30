@@ -112,29 +112,26 @@ if not filtered_df.empty:
     fig_net = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0)))
     st.plotly_chart(fig_net, use_container_width=True)
 
-    # --- 10. INTEGRAZIONE CLINICAL TRIALS (GCI) ---
+
+
+# --- VERSIONE TEST VELOCE ---
     if search_query:
         st.divider()
-        st.header(f"📑 Evidence Report Clinico: {search_query}")
+        st.subheader(f"Ricerca Clinica per: {search_query}")
+        
+        # 1. Vediamo se la tabella risponde
         try:
-            clinical_res = supabase.table("clinical_trials").select("*").or_(
-                f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
-            ).execute()
-            trials = pd.DataFrame(clinical_res.data)
-
-            if not trials.empty:
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Trial Totali", len(trials))
-                pc_count = len(trials[trials['Practice_Changing'].astype(str).str.contains('Yes', case=False, na=False)])
-                m2.metric("Practice Changing", pc_count)
-                m3.metric("Fase Prevalente", trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A")
-
-                st.subheader("Dettaglio Studi Clinici (GCI)")
-                cols = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
-                st.dataframe(trials[[c for c in cols if c in trials.columns]], use_container_width=True)
-            else:
-                st.info(f"Nessun trial clinico trovato per '{search_query}' nel database GCI.")
+            res = supabase.table("clinical_trials").select("count", count="exact").limit(1).execute()
+            st.write("✅ Connessione alla tabella clinical_trials riuscita.")
         except Exception as e:
-            st.error(f"Errore caricamento GCI: {e}")
-else:
-    st.warning("⚠️ Nessun target corrisponde ai filtri.")
+            st.error(f"❌ Errore di connessione: La tabella 'clinical_trials' non esiste su Supabase. Errore: {e}")
+
+        # 2. Vediamo se trova il target specifico
+        clinical_res = supabase.table("clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
+        trials = pd.DataFrame(clinical_res.data)
+        
+        if not trials.empty:
+            st.success(f"Trovati {len(trials)} studi per {search_query}")
+            st.dataframe(trials)
+        else:
+            st.warning(f"Nessun dato trovato per '{search_query}'. Controlla che nella colonna Primary_Biomarker ci sia questo nome.")
