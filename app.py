@@ -238,7 +238,7 @@ st.plotly_chart(fig_colors, use_container_width=True)
 # --- FINE BLOCCO COLORI MAESTRO ---
 
             # --- FIRST NEIGHBORS (Top-K) ---
-            neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
+neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
 
             st.markdown("### 🔗 First Neighbors (Hub Context)")
             if neighbors_df.empty:
@@ -507,6 +507,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
