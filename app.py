@@ -126,6 +126,35 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+st.sidebar.divider()
+with st.sidebar.expander("➕ Add New Target (Admin)"):
+    with st.form("new_target_form"):
+        new_source = st.text_input("Source ID").upper()
+        new_target = st.text_input("Target ID").upper()
+        new_vtg = st.number_input("VTG Score", 0.0, 3.0, 0.8)
+        new_tmi = st.number_input("TMI Index", 0.0, 1.0, 0.1)
+        
+        submit_button = st.form_submit_button("Register in AXON")
+        
+        if submit_button:
+            if new_source and new_target:
+                new_data = {
+                    "source_id": new_source,
+                    "target_id": new_target,
+                    "initial_score": new_vtg,
+                    "toxicity_index": new_tmi,
+                    "ces_score": new_vtg * (1 - new_tmi)
+                }
+                try:
+                    supabase.table("axon_knowledge").insert(new_data).execute()
+                    st.sidebar.success(f"Target {new_target} registered!")
+                    st.cache_data.clear() # Fondamentale per aggiornare i grafici subito
+                except Exception as e:
+                    st.sidebar.error(f"Error: {e}")
+            else:
+                st.sidebar.warning("Please fill all fields")
+
 # --- 4. DATA PORTALS ---
 gci_df, pmi_df, odi_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
@@ -372,5 +401,6 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
