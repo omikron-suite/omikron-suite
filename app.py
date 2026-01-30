@@ -31,23 +31,25 @@ supabase = create_client(URL, KEY)
 
 @st.cache_data(ttl=600)
 def load_axon():
-
-    # --- DEBUG: CONTROLLO CARICAMENTO ---
-if not df.empty:
-    st.sidebar.success(f"✅ {len(df)} record caricati")
-    if st.sidebar.checkbox("Mostra Anteprima Database"):
-        st.write(df.head(10)) # Mostra le prime 10 righe per vedere i nomi
-else:
-    st.sidebar.error("❌ Il database AXON è vuoto o non collegato")
-    
-    try:
-        # Carichiamo la tabella axon_knowledge
+    try: # <--- Questo deve essere rientrato
         res = supabase.table("axon_knowledge").select("*").execute()
         d = pd.DataFrame(res.data or [])
         
+        # Riga 36 - DEVE ESSERE RIENTRATA (indentata)
         if d.empty:
             return d
+            
+        # ... tutto il resto del codice dentro la funzione deve essere allineato qui ...
+        return d
+        
+    except Exception as e: # <--- Allineato con 'try'
+        return pd.DataFrame({"error": [str(e)]})
 
+# Riga successiva (fuori dalla funzione) deve tornare all'inizio della riga
+
+
+
+df = load_axon()
         # --- LOGICA DI PULIZIA AUTOMATICA (PURGE) ---
         # Rimuoviamo OMI- se è rimasto qualcosa nel DB per errore
         d["target_id"] = d["target_id"].astype(str).str.replace("OMI-", "").str.strip().str.upper()
@@ -160,4 +162,5 @@ else:
 st.divider()
 st.subheader("🕸️ Network Map & Rankings")
 # [Qui inserisci il tuo codice Plotly/NetworkX già esistente per la ragnatela]
+
 
