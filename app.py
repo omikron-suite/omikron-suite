@@ -112,47 +112,80 @@ if not pmi_df.empty:
             st.write(f"**Readouts:** {p['Key_Readouts']}")
             st.caption(f"Priority: {p['Evidence_Priority']} | Confidence: {p['Confidence_Default']}")
 
-# --- 7. GRAFICI E RAGNATELA ---
+# --- 7. RAGNATELA DINAMICA (SISTEMATA) ---
 st.divider()
-c1, c2 = st.columns([2, 1])
-with c1:
-    if not filtered_df.empty:
-        st.plotly_chart(px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index", 
-                               color_continuous_scale="RdYlGn_r", template="plotly_dark"), use_container_width=True)
-with c2:
-    if not filtered_df.empty:
-        st.subheader("🥇 Hub Ranking")
-        st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
+st.subheader("🕸️ Network Interaction Map (Relational Focus)")
 
-# RAGNATELA
-st.subheader("🕸️ Network Interaction Map")
 if not filtered_df.empty:
     G = nx.Graph()
+    
+    # 1. Creiamo i Nodi
     for _, r in filtered_df.iterrows():
-        is_f = r['target_id'].upper() == search_query
-        G.add_node(r['target_id'], size=float(r['initial_score']) * (40 if is_f else 25), color=float(r['toxicity_index']))
+        tid = r['target_id'].upper()
+        is_focus = tid == search_query
+        # Dimensioni differenziate per l'Hub principale
+        G.add_node(tid, 
+                   size=float(r['initial_score']) * (60 if is_focus else 30), 
+                   color=float(r['toxicity_index']),
+                   is_focus=is_focus)
+    
+    # 2. Creiamo le Connessioni (Il "Magnetismo")
     nodes = list(G.nodes())
     if search_query in nodes:
-        for n in nodes:
-            if n != search_query: G.add_edge(search_query, n)
-    
-    pos = nx.spring_layout(G, k=0.8, seed=42)
-    edge_x, edge_y = [], []
-    for e in G.edges():
-        x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
-        edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
-    
-    fig_net = go.Figure(data=[
-        go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#999'), mode='lines', hoverinfo='none'),
-        go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes], mode='markers+text', 
-                   text=nodes, textposition="top center",
-                   marker=dict(size=[G.nodes[n]['size'] for n in nodes], color=[G.nodes[n]['color'] for n in nodes],
-                   colorscale='RdYlGn_r', line=dict(color='white', width=2), showscale=True))
-    ])
-    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
-    st.plotly_chart(fig_net, use_container_width=True)
+        for node in nodes:
+            if node != search_query:
+                # Forza la connessione tra il Sole (Search) e i Pianeti (Neighbors)
+                G.add_edge(search_query, node)
+    else:
+        # Se non c'è una ricerca specifica, connetti i nodi in sequenza per non lasciarli isolati
+        for i in range(len(nodes)-1):
+            G.add_edge(nodes[i], nodes[i+1])
 
+    # 3. Layout: Spring con forza aumentata (k)
+    pos = nx.spring_layout(G, k=1.2, seed=42) 
+    
+    edge_x, edge_y = [], []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+    
+    # Disegno Linee
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#444'), mode='lines', hoverinfo='none')
+    
+    # Disegno Nodi
+    node_x, node_y, node_color, node_size, node_text = [], [], [], [], []
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_text.append(node)
+        node_color.append(G.nodes[node]['color'])
+        node_size.append(G.nodes[node]['size'])
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y, mode='markers+text', text=node_text,
+        textposition="top center",
+        marker=dict(
+            showscale=True, colorscale='RdYlGn_r', color=node_color,
+            size=node_size, line=dict(color='white', width=2)
+        )
+    )
+
+    # 4. Rendering Finale
+    fig = go.Figure(data=[edge_trace, node_trace],
+                 layout=go.Layout(
+                    showlegend=False,
+                    margin=dict(b=0,l=0,r=0,t=0),
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                 ))
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
 # --- 8. PORTALI DATI (ODI & GCI) ---
 st.divider()
 p_odi, p_gci = st.columns(2)
@@ -167,3 +200,4 @@ with p_gci:
 
 st.divider()
 st.caption("MAESTRO Suite | Integration of AXON, GCI, ODI, PMI | RUO")
+
