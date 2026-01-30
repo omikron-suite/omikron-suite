@@ -95,6 +95,43 @@ with col2:
         st.subheader("🥇 Top Neighbors")
         st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
 
+
+# --- AGGIUNTA SOTTO IL CARTIGLIO (Punto 5) ---
+if search_query and not target_data.empty:
+    # Preparazione del testo del Report
+    report_text = f"""# MAESTRO INTELLIGENCE REPORT: {search_query}
+Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
+Status: RESEARCH USE ONLY
+
+## 1. MOLECULAR PROFILE (AXON)
+- Target ID: {row['target_id']}
+- Signal Power (VTG): {row['initial_score']:.2f}
+- Toxicity Index (TMI): {row['toxicity_index']:.2f}
+- Efficiency Score (CES): {row['ces_score']:.2f}
+
+## 2. CLINICAL EVIDENCE (GCI Summary)
+"""
+    if not gci_df.empty:
+        report_text += f"- Total Trials Found: {len(gci_df)}\n"
+        report_text += f"- Top Clinical Phase: {gci_df['Phase'].iloc[0]}\n"
+        report_text += f"- Practice Changing: {'Yes' if 'Yes' in gci_df['Practice_Changing'].values else 'No'}\n\n"
+        report_text += "### Key Trials Data:\n"
+        for _, trial in gci_df.head(5).iterrows():
+            report_text += f"- {trial['Canonical_Title']} ({trial['Year']}) | PFS: {trial.get('Key_Results_PFS', 'N/D')}\n"
+    else:
+        report_text += "- No clinical trials found in GCI database for this biomarker.\n"
+
+    report_text += "\n--- \nMAESTRO Omikron Suite - Confidential Research Data"
+
+    # Tasto di Download
+    st.download_button(
+        label="📥 Scarica Intelligence Report (.txt)",
+        data=report_text,
+        file_name=f"MAESTRO_Report_{search_query}.txt",
+        mime="text/plain",
+        help="Genera un file di testo con il riepilogo completo molecolare e clinico."
+    )
+
 # --- 6. RAGNATELA DINAMICA ---
 st.divider()
 st.subheader("🕸️ Network Interaction Map (Relational Focus)")
@@ -164,3 +201,4 @@ st.caption("""
     Data provided by AXON Knowledge and GCI Database are intended for scientific analysis 
     and do not constitute medical advice or clinical guidelines.
 """)
+
