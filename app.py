@@ -7,7 +7,7 @@ import plotly.express as px
 from datetime import datetime
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="MAESTRO Omikron Suite v20.6", layout="wide")
+st.set_page_config(page_title="MAESTRO Omikron Suite v20.6.1", layout="wide")
 
 # --- 2. CONNESSIONE ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
@@ -286,3 +286,4 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
