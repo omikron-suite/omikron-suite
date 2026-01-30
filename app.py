@@ -208,6 +208,35 @@ else:
 
             st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Functional target analysis in progress: critical signaling hub detected.')}")
 
+            # --- INIZIO BLOCCO COLORI MAESTRO ---
+st.divider()
+st.subheader("📊 Analisi Cromatica Target")
+
+# Assicuriamoci che i dati siano pronti per il colore
+# Il colore sarà basato sulla toxicity_index (TMI)
+# Rosso = Pericoloso, Verde = Sicuro
+
+fig_colors = px.bar(
+    target_data, 
+    x="action_verb", 
+    y="initial_score",
+    color="toxicity_index", 
+    color_continuous_scale="RdYlGn_r", # La scala Rosso-Giallo-Verde invertita
+    range_color=[0, 1], # Definisce i confini della tossicità
+    labels={'toxicity_index': 'Rischio TMI', 'initial_score': 'Forza VTG', 'action_verb': 'Meccanismo'},
+    template="plotly_dark"
+)
+
+# Rende il grafico più leggibile e professionale
+fig_colors.update_layout(
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    coloraxis_colorbar=dict(title="Safety Index")
+)
+
+st.plotly_chart(fig_colors, use_container_width=True)
+# --- FINE BLOCCO COLORI MAESTRO ---
+
             # --- FIRST NEIGHBORS (Top-K) ---
             neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
 
@@ -478,6 +507,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
