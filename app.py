@@ -56,6 +56,25 @@ URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
 supabase = create_client(URL, KEY)
 
+@st.cache_data(ttl=300)
+def load_data_orchestra():
+    try:
+        # Carica Registro
+        reg = supabase.table("target_registry").select("*").execute()
+        df_reg = pd.DataFrame(reg.data or [])
+        
+        # Carica Dati AXON
+        axon = supabase.table("axon_knowledge").select("*").execute()
+        df_axon = pd.DataFrame(axon.data or [])
+        
+        return df_reg, df_axon
+    except Exception as e:
+        st.error(f"Errore connessione: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+df_reg, df_axon = load_data_orchestra()
+
+
 @st.cache_data(ttl=600)
 def load_axon():
     try:
@@ -79,6 +98,7 @@ def load_axon():
         return d
     except Exception as e:
         return pd.DataFrame({"error": [str(e)]})
+        
 
 def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, max_t: float) -> pd.DataFrame:
     """
