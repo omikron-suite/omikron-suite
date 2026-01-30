@@ -39,28 +39,22 @@ search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS
 st.sidebar.warning("⚠️ **Research Use Only**")
 
 # --- 4. LOGICA DI FILTRO ---
-gci_df = pd.DataFrame()
-pmi_df = pd.DataFrame()
-odi_df = pd.DataFrame()
+gci_df, pmi_df, odi_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 if search_query and not df.empty:
     try:
         res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
         gci_df = pd.DataFrame(res_gci.data)
-        
         res_pmi = supabase.table("pmi_database").select("*").ilike("Key_Targets", f"%{search_query}%").execute()
         pmi_df = pd.DataFrame(res_pmi.data)
-        
         res_odi = supabase.table("odi_database").select("*").ilike("Targets", f"%{search_query}%").execute()
         odi_df = pd.DataFrame(res_odi.data)
-    except:
-        pass
+    except: pass
 
     all_targets = df['target_id'].tolist()
     if search_query in all_targets:
         idx = all_targets.index(search_query)
-        neighbor_indices = range(max(0, idx-2), min(len(all_targets), idx+3))
-        neighbors = [all_targets[i] for i in neighbor_indices]
+        neighbors = [all_targets[i] for i in range(max(0, idx-2), min(len(all_targets), idx+3))]
         filtered_df = df[df['target_id'].isin(neighbors)]
     else:
         filtered_df = df[df['target_id'].str.contains(search_query, case=False, na=False)]
@@ -75,127 +69,86 @@ if search_query and not df.empty:
     if not target_data.empty:
         row = target_data.iloc[0]
         st.markdown(f"## 🎼 Opera Director: {search_query}")
-        
-        r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
-        r1c1.metric("OMI (Biomarker)", "DETECTED")
-        r1c2.metric("SMI (Pathway)", f"{len(pmi_df)} Linked" if not pmi_df.empty else "STABLE")
-        r1c3.metric("ODI (Drug)", "TARGETABLE" if not odi_df.empty else "NO DRUG")
-        r1c4.metric("TMI (Tossicità)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
-        r1c5.metric("CES (Efficiency)", f"{row['ces_score']:.2f}")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("OMI", "DETECTED")
+        c2.metric("SMI", f"{len(pmi_df)} Linked")
+        c3.metric("ODI", "TARGETABLE" if not odi_df.empty else "NO DRUG")
+        c4.metric("TMI", f"{row['toxicity_index']:.2f}", delta_color="inverse")
+        c5.metric("CES", f"{row['ces_score']:.2f}")
 
         r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
-        r2c1.metric("BCI (Bio-cost.)", "OPTIMAL")
-        r2c2.metric("GNI (Genetica)", "STABLE")
-        r2c3.metric("EVI (Ambiente)", "LOW RISK")
-        r2c4.metric("MBI (Microbiota)", "RESILIENT")
+        r2c1.metric("BCI", "OPTIMAL"); r2c2.metric("GNI", "STABLE"); r2c3.metric("EVI", "LOW RISK")
+        r2c4.metric("MBI", "RESILIENT")
         phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
-        r2c5.metric("GCI (Clinica)", phase)
-
-        report_text = f"REPORT: {search_query}\nSignal VTG: {row['initial_score']:.2f}\nPhase: {phase}"
-        st.download_button("📥 Scarica Report (.txt)", report_text, file_name=f"MAESTRO_{search_query}.txt")
+        r2c5.metric("GCI", phase)
         st.divider()
 
-# --- 6. PATHWAY DETAIL ---
-if not pmi_df.empty:
-    st.subheader("🧬 Signaling & Pathway Analysis (SMI)")
-    for _, p in pmi_df.iterrows():
-        with st.expander(f"Pathway: {p['Canonical_Name']}"):
-            st.write(f"**Descrizione:** {p['Description_L0']}")
-            st.caption(f"Priority: {p['Evidence_Priority']}")
-
-# --- 7. GRAFICI E RAGNATELA (FIX LAYOUT) ---
-st.divider()
-c1, c2 = st.columns([2, 1])
-with c1:
-    if not filtered_df.empty:
-        st.plotly_chart(px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index", 
-                               color_continuous_scale="RdYlGn_r", template="plotly_dark"), use_container_width=True)
-with c2:
-    if not filtered_df.empty:
-        st.subheader("🥇 Hub Ranking")
-        st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
-
-# RAGNATELA POTENZIATA
+# --- 7. RAGNATELA ESPLOSA ---
 st.subheader("🕸️ Network Interaction Map (Dynamic Spider Layout)")
-
+[Image of an interactive protein-protein interaction network showing nodes and connecting edges]
 
 if not filtered_df.empty:
     G = nx.Graph()
     
-    # 1. Nodi Target (AXON)
+    # 1. Aggiunta Nodi Target (Nucleo)
     for _, r in filtered_df.iterrows():
         tid = r['target_id']
         is_f = tid.upper() == search_query
-        G.add_node(tid, 
-                   size=float(r['initial_score']) * (50 if is_f else 30), 
-                   color=float(r['toxicity_index']), 
-                   type='target',
-                   label=tid)
+        G.add_node(tid, size=float(r['initial_score']) * (50 if is_f else 30), color=float(r['toxicity_index']), type='target')
 
-    # 2. Nodi Farmaco (ODI)
-    if not odi_df.empty and search_query:
-        for _, drug in odi_df.head(4).iterrows():
-            d_node = drug['Generic_Name']
-            G.add_node(d_node, size=25, color=0.3, type='drug', label=f"💊 {d_node}")
-            G.add_edge(search_query, d_node)
+    # 2. Aggiunta Nodi Satelliti (Farmaci e Pathway)
+    if search_query:
+        if not odi_df.empty:
+            for _, drug in odi_df.head(4).iterrows():
+                d_node = f"💊 {drug['Generic_Name']}"
+                G.add_node(d_node, size=25, color=0.3, type='drug')
+                G.add_edge(search_query, d_node)
+        
+        if not pmi_df.empty:
+            for _, path in pmi_df.head(4).iterrows():
+                p_node = f"🧬 {path['Canonical_Name']}"
+                G.add_node(p_node, size=25, color=0.7, type='pathway')
+                G.add_edge(search_query, p_node)
 
-    # 3. Nodi Pathway (PMI)
-    if not pmi_df.empty and search_query:
-        for _, path in pmi_df.head(4).iterrows():
-            p_node = path['Canonical_Name']
-            G.add_node(p_node, size=25, color=0.7, type='pathway', label=f"🧬 {p_node}")
-            G.add_edge(search_query, p_node)
-
-    # 4. Collegamenti tra Hub Target
+    # 3. Collegamenti Interni tra Target
     t_nodes = [n for n, d in G.nodes(data=True) if d.get('type') == 'target']
     if search_query in t_nodes:
         for tn in t_nodes:
             if tn != search_query: G.add_edge(search_query, tn)
 
-    # LAYOUT DINAMICO: k regola la distanza tra nodi, iterations la stabilità
-    pos = nx.spring_layout(G, k=1.2, iterations=50, seed=42)
+    # Layout Calibrato: k=1.5 spinge i nodi lontano per rompere il cerchio
+    pos = nx.spring_layout(G, k=1.5, iterations=100, seed=42)
     
+    # Tracciamento linee
     edge_x, edge_y = [], []
     for e in G.edges():
         x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
     
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.2, color='#666'), mode='lines', hoverinfo='none')
+    fig_net = go.Figure()
+    fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='#888'), mode='lines', hoverinfo='none'))
     
-    node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
-    for n in G.nodes():
-        x, y = pos[n]
-        node_x.append(x)
-        node_y.append(y)
-        node_text.append(G.nodes[n].get('label', n))
-        node_color.append(G.nodes[n].get('color', 0.5))
-        node_size.append(G.nodes[n].get('size', 20))
-
+    # Tracciamento nodi
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text', text=node_text, textposition="top center",
-        marker=dict(showscale=True, colorscale='RdYlGn_r', color=node_color, size=node_size, 
-                    line=dict(color='white', width=1.5))
+        x=[pos[n][0] for n in G.nodes()], y=[pos[n][1] for n in G.nodes()],
+        mode='markers+text', text=list(G.nodes()), textposition="top center",
+        marker=dict(showscale=True, colorscale='RdYlGn_r', color=[G.nodes[n]['color'] for n in G.nodes()],
+                    size=[G.nodes[n]['size'] for n in G.nodes()], line=dict(color='white', width=1.5))
     )
-
-    fig_net = go.Figure(data=[edge_trace, node_trace],
-                        layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
-                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'))
     
+    fig_net.add_trace(node_trace)
+    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
     st.plotly_chart(fig_net, use_container_width=True)
 
 # --- 8. PORTALI DATI ---
 st.divider()
-p_odi, p_gci = st.columns(2)
-with p_odi:
+c_odi, c_gci = st.columns(2)
+with c_odi:
     st.header("💊 Therapeutics (ODI)")
-    if not odi_df.empty:
-        st.dataframe(odi_df[['Generic_Name', 'Drug_Class', 'Regulatory_Status_US']], use_container_width=True)
-with p_gci:
+    if not odi_df.empty: st.dataframe(odi_df[['Generic_Name', 'Drug_Class', 'Regulatory_Status_US']], use_container_width=True)
+with c_gci:
     st.header("🧪 Clinical Trials (GCI)")
-    if not gci_df.empty:
-        st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
+    if not gci_df.empty: st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
 
-st.divider()
-st.caption("MAESTRO Suite | Integrated Build | RUO")
+st.caption("MAESTRO Suite v13.6 | Full-Node Expansion | RUO")
