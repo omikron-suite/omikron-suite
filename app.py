@@ -7,7 +7,7 @@ import plotly.express as px
 from datetime import datetime
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="MAESTRO Omikron Suite v20.6.1", layout="wide")
+st.set_page_config(page_title="MAESTRO Omikron Suite v2.6.2 build 2630012026", layout="wide")
 
 # --- 2. CONNECTION (Secrets Recommended) ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
@@ -63,7 +63,7 @@ df = load_axon()
 # --- 3. SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Omikron Control Center")
-st.sidebar.caption("v20.6 Platinum Build | 2026")
+st.sidebar.caption("v2.6.2 Platinum Build | 2026")
 
 min_sig = st.sidebar.slider(
     "Minimum VTG Threshold", 0.0, 3.0, 0.8,
@@ -337,3 +337,4 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
