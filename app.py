@@ -28,26 +28,38 @@ df_axon, df_odi_master = load_all_data()
 # --- 2. SIDEBAR & FILTRI ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("MAESTRO Control")
-user_input = st.sidebar.text_input("🔍 Omni-Search (Target o Farmaco)", "").strip().upper()
+
+# Mattoncino 1: Ricerca Target
+st.sidebar.subheader("🧬 Core: Hub Focus")
+t_search = st.sidebar.text_input("Inserisci Target (es. KRAS)", "").strip().upper()
+
+# Mattoncino 2: Tasto Correlazione (Lego Toggle)
+st.sidebar.divider()
+enable_drug_link = st.sidebar.toggle("🔗 Attiva Analisi Farmaco", help="Abilita il cross-link con database ODI")
+
+d_search = ""
+if enable_drug_link:
+    d_search = st.sidebar.text_input("💊 Cerca Farmaco (es. pembro)", "").strip().lower()
 
 st.sidebar.divider()
 st.sidebar.error("### ⚠️ DISCLAIMER")
-st.sidebar.caption("RESEARCH USE ONLY (RUO). I dati non sostituiscono il parere medico.")
+st.sidebar.caption("RESEARCH USE ONLY (RUO). I dati non sostituiscono il parere medico clinico.")
 
-# --- 3. LOGICA DI IDENTIFICAZIONE TARGET ---
-search_query = user_input
-found_drug_info = ""
-
-if user_input and not df_odi_master.empty:
-    m = df_odi_master[df_odi_master['Generic_Name'].str.contains(user_input, case=False, na=False) | 
-                      df_odi_master['Brand_Names'].str.contains(user_input, case=False, na=False)]
-    if not m.empty:
-        row_d = m.iloc[0]
-        found_drug_info = f"{row_d['Generic_Name']} ({row_d['Brand_Names']})"
-        search_query = str(row_d['Targets']).split('(')[0].split(';')[0].strip().upper()
-
-# --- 4. RECUPERO DATI INTEGRATI ---
+# --- 3. LOGICA DI FILTRO & SATELLITI ---
+search_query = t_search
+found_drug_label = ""
 gci_df, pmi_df, odi_target_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+# Se il farmaco è attivo, cerchiamo la correlazione
+if enable_drug_link and d_search and not df_odi_master.empty:
+    m = df_odi_master[df_odi_master['Generic_Name'].str.contains(d_search, case=False, na=False) | 
+                      df_odi_master['Brand_Names'].str.contains(d_search, case=False, na=False)]
+    if not m.empty:
+        dr = m.iloc[0]
+        found_drug_label = f"{dr['Generic_Name']} ({dr['Brand_Names']})"
+        if not t_search: # Se non c'è target manuale, il farmaco comanda
+            search_query = str(dr['Targets']).split('(')[0].split(';')[0].strip().upper()
+
 if search_query:
     try:
         gci_df = pd.DataFrame(supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute().data)
@@ -55,108 +67,81 @@ if search_query:
         odi_target_df = pd.DataFrame(supabase.table("odi_database").select("*").ilike("Targets", f"%{search_query}%").execute().data)
     except: pass
 
-# --- 5. DASHBOARD PRINCIPALE (TUTTO INSIEME) ---
+# --- 4. DASHBOARD CENTRALE ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 if search_query:
-    # --- HEADER: IDENTIFICAZIONE TARGET ---
-    c_head1, c_head2 = st.columns([2, 1])
-    with c_head1:
-        st.markdown(f"# 🧬 Target ID: `{search_query}`")
-        if found_drug_info:
-            st.success(f"✅ Farmaco Identificato: **{found_drug_info}**")
-    with c_head2:
-        if not df_axon.empty and search_query in df_axon['target_id'].values:
-            score = df_axon[df_axon['target_id'] == search_query]['ces_score'].values[0]
-            st.metric("EFFICIENCY SCORE (CES)", f"{score:.2f}")
+    st.markdown(f"# 🧬 Hub Intelligence: `{search_query}`")
+    
+    # FINESTRA HUB-FARMACO (Modulo Lego richiesto)
+    if enable_drug_link and d_search:
+        st.subheader("🖇️ Hub-Drug Linker")
+        c_link1, c_link2 = st.columns([1, 2])
+        if found_drug_label:
+            if search_query in str(dr['Targets']).upper():
+                c_link1.success(f"✅ CORRELATO: {found_drug_label}")
+                c_link2.info(f"Il farmaco agisce direttamente su {search_query}.")
+            else:
+                c_link1.warning("⚠️ NESSUN LINK DIRETTO")
+                c_link2.write(f"Farmaco: {found_drug_label} | Target ODI: `{dr['Targets']}`")
+        st.divider()
 
-    st.divider()
-
-    # --- PARTE 1: OPERA DIRECTOR (10 PARAMETRI) ---
+    # OPERA DIRECTOR (10 PARAMETRI)
     if not df_axon.empty and search_query in df_axon['target_id'].values:
         row = df_axon[df_axon['target_id'] == search_query].iloc[0]
-        
         st.subheader("🎼 Opera Director Status")
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("OMI (Biomarker)", "ACTIVE")
-        m2.metric("SMI (Pathways)", f"{len(pmi_df)}")
-        m3.metric("ODI (Drug Lib)", f"{len(odi_target_df)}")
-        m4.metric("TMI (Toxicity)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
-        m5.metric("CES (Final)", f"{row['ces_score']:.2f}")
+        m1.metric("OMI", "DETECTED")
+        m2.metric("SMI", f"{len(pmi_df)} Path")
+        m3.metric("ODI", "LINKED" if not odi_target_df.empty else "NO DRUG")
+        m4.metric("TMI", f"{row['toxicity_index']:.2f}", delta_color="inverse")
+        m5.metric("CES", f"{row['ces_score']:.2f}")
 
         m6, m7, m8, m9, m10 = st.columns(5)
-        m6.metric("BCI (Context)", "OK"); m7.metric("GNI (Genomic)", "STABLE")
-        m8.metric("EVI (Evidence)", "HIGH"); m9.metric("MBI (Microb.)", "NEUTRAL")
+        m6.metric("BCI", "OPTIMAL"); m7.metric("GNI", "STABLE")
+        m8.metric("EVI", "HIGH"); m9.metric("MBI", "NEUTRAL")
         phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/A"
-        m10.metric("GCI (Trials)", phase)
-        
+        m10.metric("GCI", phase)
+    
     st.divider()
 
-    # --- PARTE 2: RAGNATELA (NETWORK MAP) ---
-    st.subheader("🕸️ Network Interaction Map (Ragnatela)")
+    # RAGNATELA (NETWORK MAP)
+    st.subheader("🕸️ Network Interaction Map")
     
-    # Creazione della rete intorno al target
-    G = nx.Graph()
     if not df_axon.empty:
-        # Prendiamo il target principale + 8 satelliti per la ragnatela
-        main_target = search_query
-        satellites = df_axon[df_axon['target_id'] != main_target].head(8)['target_id'].tolist()
-        
-        # Aggiungiamo il centro
-        G.add_node(main_target, size=50, color='gold')
-        # Aggiungiamo i satelliti e creiamo i link (le "tele")
-        for sat in satellites:
-            G.add_node(sat, size=25, color='skyblue')
-            G.add_edge(main_target, sat) # Questo crea la linea!
+        G = nx.Graph()
+        # Centro + Satelliti
+        satellites = df_axon[df_axon['target_id'] != search_query].sort_values('initial_score', ascending=False).head(8)['target_id'].tolist()
+        G.add_node(search_query, size=60, color='gold')
+        for s in satellites:
+            G.add_node(s, size=30, color='skyblue')
+            G.add_edge(search_query, s) # Forza i link visibili
 
-        pos = nx.spring_layout(G, k=0.5, seed=42)
-        
-        # Disegno Linee
+        pos = nx.spring_layout(G, k=0.6, seed=42)
         edge_x, edge_y = [], []
-        for edge in G.edges():
-            x0, y0 = pos[edge[0]]; x1, y1 = pos[edge[1]]
+        for e in G.edges():
+            x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
             edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
         
-        edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='#888'), hoverinfo='none', mode='lines')
-        
-        # Disegno Nodi
-        node_x = [pos[node][0] for node in G.nodes()]
-        node_y = [pos[node][1] for node in G.nodes()]
-        
-        node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=list(G.nodes()), 
-                                textposition="top center", marker=dict(size=[G.nodes[n]['size'] for n in G.nodes()],
-                                color=[G.nodes[n]['color'] for n in G.nodes()], line_width=2))
-
-        fig_net = go.Figure(data=[edge_trace, node_trace],
-                            layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
-                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'))
+        fig_net = go.Figure(data=[
+            go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#888'), mode='lines', hoverinfo='none'),
+            go.Scatter(x=[pos[n][0] for n in G.nodes()], y=[pos[n][1] for n in G.nodes()], 
+                       mode='markers+text', text=list(G.nodes()), textposition="top center",
+                       marker=dict(size=[G.nodes[n]['size'] for n in G.nodes()], color=[G.nodes[n]['color'] for n in G.nodes()],
+                       colorscale='Viridis', line_width=2))
+        ])
+        fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                              xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
         st.plotly_chart(fig_net, use_container_width=True)
 
+    # DATABASE PORTALS
     st.divider()
-
-    # --- PARTE 3: DEEP DIVE DATABASES ---
-    st.subheader("🧪 Dettaglio Database Integrati")
-    tab_odi, tab_pmi, tab_gci = st.tabs(["💊 Farmaci (ODI)", "🧬 Pathways (PMI)", "🔬 Clinical Trials (GCI)"])
-    
-    with tab_odi:
-        if not odi_target_df.empty: st.dataframe(odi_target_df[['Generic_Name', 'Brand_Names', 'Drug_Class', 'Targets']], use_container_width=True)
-        else: st.write("Nessun farmaco specifico trovato per questo target.")
-        
-    with tab_pmi:
-        if not pmi_df.empty:
-            for _, r_p in pmi_df.iterrows():
-                with st.expander(f"Pathway: {r_p['Canonical_Name']}"):
-                    st.write(f"**Key Targets:** {r_p['Key_Targets']}")
-                    st.write(f"**Descrizione:** {r_p.get('Description_L0', 'Dettagli nel database.')}")
-        else: st.write("Nessun pathway mappato.")
-
-    with tab_gci:
-        if not gci_df.empty: st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Primary_Biomarker']], use_container_width=True)
-        else: st.write("Nessun trial clinico registrato.")
+    tab1, tab2, tab3 = st.tabs(["💊 Farmaci (ODI)", "🧬 Pathways (PMI)", "🔬 Clinical Trials (GCI)"])
+    with tab1: st.dataframe(odi_target_df, use_container_width=True)
+    with tab2: st.dataframe(pmi_df, use_container_width=True)
+    with tab3: st.dataframe(gci_df, use_container_width=True)
 
 else:
-    st.info("👋 Benvenuto. Inserisci un Target (es. KRAS) o un Farmaco (es. Pembro) nella barra laterale per iniziare l'analisi.")
+    st.info("👋 Inserisci un Target o attiva la Correlazione Farmaco per visualizzare l'orchestra.")
 
-st.caption("MAESTRO Suite v11.4 | Powered by Omikron Orchestra | RUO")
+st.caption("MAESTRO Suite v11.5 | LEGO Architecture | RUO")
