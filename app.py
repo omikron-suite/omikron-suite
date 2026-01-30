@@ -7,7 +7,7 @@ import plotly.express as px
 from datetime import datetime
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="MAESTRO Omikron Suite v19.0", layout="wide")
+st.set_page_config(page_title="MAESTRO Omikron Suite v19.6", layout="wide")
 
 # --- 2. CONNESSIONE ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
@@ -33,24 +33,34 @@ df = load_axon()
 # --- 3. SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Omikron Control Center")
-st.sidebar.caption("Versione 19.5.0 - Stable")
+st.sidebar.caption("Versione 19.6.2 - Phoenix Stable")
 
-min_sig = st.sidebar.slider("Soglia Minima Segnale (VTG)", 0.0, 3.0, 0.8, help="Filtra la forza del segnale biologico rilevato.")
-max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8, help="Filtra il rischio di tossicità associato.")
+min_sig = st.sidebar.slider("Soglia Minima Segnale (VTG)", 0.0, 3.0, 0.8)
+max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
 
 st.sidebar.divider()
 st.sidebar.markdown("### 🔍 Ricerca Intelligente")
 search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS").strip().upper()
 
-# --- 4. DATA PORTALS & CHECK ---
+# --- 4. DATA PORTALS & TOTAL COUNTS ---
 gci_df, pmi_df, odi_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 target_verified = False
 
+# Conteggi Totali Globali (Sempre caricati per i badge)
+@st.cache_data(ttl=3600)
+def get_global_counts():
+    try:
+        c_odi = supabase.table("odi_database").select("id", count="exact").execute().count
+        c_pmi = supabase.table("pmi_database").select("id", count="exact").execute().count
+        c_gci = supabase.table("GCI_clinical_trials").select("id", count="exact").execute().count
+        return c_odi, c_pmi, c_gci
+    except: return 0, 0, 0
+
+total_odi, total_pmi, total_gci = get_global_counts()
+
 if search_query and not df.empty:
     try:
-        if search_query in df['target_id'].values:
-            target_verified = True
-        
+        if search_query in df['target_id'].values: target_verified = True
         res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
         gci_df = pd.DataFrame(res_gci.data or [])
         res_pmi = supabase.table("pmi_database").select("*").ilike("Key_Targets", f"%{search_query}%").execute()
@@ -63,41 +73,28 @@ if search_query and not df.empty:
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 if search_query:
-    if target_verified:
-        st.success(f"✅ **Target Verificato:** {search_query}")
-    else:
-        st.info(f"ℹ️ **Ricerca libera:** '{search_query}'")
+    if target_verified: st.success(f"✅ **Target Verificato:** {search_query}")
+    else: st.info(f"ℹ️ **Ricerca libera:** '{search_query}'")
 
 if search_query and not df.empty:
     target_data = df[df["target_id"] == search_query]
     if not target_data.empty:
         row = target_data.iloc[0]
         st.markdown(f"## 🎼 Opera Director: {search_query}")
-
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("OMI (Biomarker)", "DETECTED")
-        c2.metric("SMI (Pathway)", f"{len(pmi_df)} Linked")
-        c3.metric("ODI (Drug)", "TARGETABLE" if not odi_df.empty else "NO DRUG")
-        c4.metric("TMI (Tossicità)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
-        c5.metric("CES (Efficiency)", f"{row['ces_score']:.2f}")
-
-        r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
-        r2c1.metric("BCI", "OPTIMAL")
-        r2c2.metric("GNI", "STABLE")
-        r2c3.metric("EVI", "LOW RISK")
-        r2c4.metric("MBI", "RESILIENT")
-        phase = gci_df["Phase"].iloc[0] if ("Phase" in gci_df.columns and not gci_df.empty) else "N/D"
-        r2c5.metric("GCI (Clinica)", phase)
-
-        report_txt = f"MAESTRO REPORT - {search_query}\nData: {datetime.now().strftime('%d/%m/%Y %H:%M')}\nVTG: {row['initial_score']}\n"
-        st.download_button(label="📥 Esporta Risultati (.txt)", data=report_txt, file_name=f"MAESTRO_{search_query}.txt")
+        c1.metric("OMI", "DETECTED")
+        c2.metric("SMI", f"{len(pmi_df)} Linked")
+        c3.metric("ODI", f"{len(odi_df)} Items")
+        c4.metric("TMI", f"{row['toxicity_index']:.2f}")
+        c5.metric("CES", f"{row['ces_score']:.2f}")
         st.divider()
 
-# --- 6. RAGNATELA ---
-st.subheader("🕸️ Network Interaction Map")
+# --- 6. RAGNATELA & RANKING ---
 filtered_df = df[df["target_id"].str.contains(search_query, na=False)] if search_query else df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)]
 
 if not filtered_df.empty:
+    # Ragnatela
+    st.subheader("🕸️ Network Interaction Map")
     G = nx.Graph()
     for _, r in filtered_df.iterrows():
         tid = r["target_id"]
@@ -118,7 +115,7 @@ if not filtered_df.empty:
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
 
     fig_net = go.Figure()
-    fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", hoverinfo="none", line=dict(color='#444', width=0.8)))
+    fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(color='#444', width=0.8), hoverinfo="none"))
     fig_net.add_trace(go.Scatter(
         x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
         mode="markers+text", text=nodes, textposition="top center",
@@ -129,7 +126,7 @@ if not filtered_df.empty:
     fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=500)
     st.plotly_chart(fig_net, use_container_width=True)
 
-    # --- 6b. BAR CHART RANKING (Sotto la Ragnatela) ---
+    # Ranking
     st.subheader("📊 Hub Signal Ranking")
     fig_bar = px.bar(filtered_df.sort_values("initial_score", ascending=True).tail(15), 
                      x="initial_score", y="target_id", orientation='h',
@@ -138,47 +135,47 @@ if not filtered_df.empty:
     fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig_bar, use_container_width=True)
 
+    # --- BADGE COMPATTI (Sotto Ranking dopo ricerca) ---
+    if search_query:
+        st.write("---")
+        bc1, bc2, bc3 = st.columns(3)
+        badge_style = "padding:5px; border-radius:5px; text-align:center; color:white; font-size:0.75rem; border:1px solid #444;"
+        bc1.markdown(f'<div style="background:#b8860b77; {badge_style}">💊 <b>ODI:</b> {total_odi}</div>', unsafe_allow_html=True)
+        bc2.markdown(f'<div style="background:#4b008277; {badge_style}">🧬 <b>PMI:</b> {total_pmi}</div>', unsafe_allow_html=True)
+        bc3.markdown(f'<div style="background:#2e8b5777; {badge_style}">🧪 <b>GCI:</b> {total_gci}</div>', unsafe_allow_html=True)
+
 # --- 7. HUB INTELLIGENCE ---
 if search_query:
     st.divider()
     st.subheader(f"📂 Hub Intelligence: {search_query}")
     cp, cd, ct = st.columns(3)
-
     with cp:
         st.markdown("### 🧬 Pathways (PMI)")
-        if not pmi_df.empty:
-            for _, r in pmi_df.iterrows():
-                with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**"):
-                    st.write(r.get('Description_L0', 'N/A'))
-        else: st.caption("Empty")
-
+        for _, r in pmi_df.iterrows():
+            with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**"):
+                st.write(r.get('Description_L0', 'N/A'))
     with cd:
         st.markdown("### 💊 Therapeutics (ODI)")
-        if not odi_df.empty:
-            for _, r in odi_df.iterrows():
-                with st.expander(f"**{r.get('Generic_Name', 'N/D')}**"):
-                    st.write(r.get('Description_L0', 'N/A'))
-        else: st.caption("Empty")
-
+        for _, r in odi_df.iterrows():
+            with st.expander(f"**{r.get('Generic_Name', 'N/D')}**"):
+                st.write(r.get('Description_L0', 'N/A'))
     with ct:
         st.markdown("### 🧪 Clinical Trials (GCI)")
-        if not gci_df.empty:
-            for _, r in gci_df.iterrows():
-                with st.expander(f"Phase {r.get('Phase', 'N/D')} - {r.get('NCT_Number', 'Trial')}"):
-                    st.write(f"**Titolo:** {r.get('Canonical_Title', 'N/D')}")
-        else: st.caption("Empty")
+        for _, r in gci_df.iterrows():
+            with st.expander(f"Phase {r.get('Phase', 'N/D')} - {r.get('NCT_Number', 'Trial')}"):
+                st.write(f"**Titolo:** {r.get('Canonical_Title', 'N/D')}")
 
-# --- 8. BADGE DATABASE & DISCLAIMER ---
+# --- 8. BADGE GLOBALI (Senza ricerca) & DISCLAIMER ---
 st.divider()
-if search_query:
-    # Icone di classe con conteggi sotto l'intelligence
-    b1, b2, b3 = st.columns(3)
-    b1.markdown(f"""<div style="background:#b8860b;padding:10px;border-radius:10px;text-align:center;color:white;">
-                <b>💊 ODI ITEMS:</b> {len(odi_df)}</div>""", unsafe_allow_html=True)
-    b2.markdown(f"""<div style="background:#4b0082;padding:10px;border-radius:10px;text-align:center;color:white;">
-                <b>🧬 PMI ITEMS:</b> {len(pmi_df)}</div>""", unsafe_allow_html=True)
-    b3.markdown(f"""<div style="background:#2e8b57;padding:10px;border-radius:10px;text-align:center;color:white;">
-                <b>🧪 GCI ITEMS:</b> {len(gci_df)}</div>""", unsafe_allow_html=True)
+if not search_query:
+    # Badge Grandi come da immagine caricata
+    bg1, bg2, bg3 = st.columns(3)
+    bg1.markdown(f"""<div style="background:#b8860b;padding:15px;border-radius:10px;text-align:center;color:white;font-weight:bold;">
+                💊 ODI ITEMS: {total_odi}</div>""", unsafe_allow_html=True)
+    bg2.markdown(f"""<div style="background:#4b0082;padding:15px;border-radius:10px;text-align:center;color:white;font-weight:bold;">
+                🧬 PMI ITEMS: {total_pmi}</div>""", unsafe_allow_html=True)
+    bg3.markdown(f"""<div style="background:#2e8b57;padding:15px;border-radius:10px;text-align:center;color:white;font-weight:bold;">
+                🧪 GCI ITEMS: {total_gci}</div>""", unsafe_allow_html=True)
 
 st.markdown("""
 <br>
@@ -191,7 +188,7 @@ st.markdown("""
         basate sui suddetti dati.
     </p>
     <p style="font-size: 0.8rem; color: #555; text-align: center;">
-        MAESTRO Omikron Suite v19.5.0 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
+        MAESTRO Omikron Suite v19.6.2 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
     </p>
 </div>
 """, unsafe_allow_html=True)
