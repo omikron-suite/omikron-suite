@@ -46,21 +46,16 @@ st.sidebar.divider()
 st.sidebar.markdown("### 🔍 Omni-Search (Target o Farmaco)")
 user_input = st.sidebar.text_input("Es: pembro o KRAS", "").strip().upper()
 
-# --- DISCLAIMER OBBLIGATORI ---
+# --- DISCLAIMER RUO ---
 st.sidebar.divider()
 st.sidebar.error("### ⚠️ DISCLAIMER")
-st.sidebar.caption("""
-**RESEARCH USE ONLY (RUO)**. 
-Questa piattaforma è destinata esclusivamente alla ricerca scientifica. 
-I dati non devono essere utilizzati per decisioni cliniche, diagnostiche o terapeutiche.
-""")
+st.sidebar.caption("RESEARCH USE ONLY (RUO). Non per uso clinico o diagnostico.")
 
 # --- 4. LOGICA DI MAPPATURA (FARMACI E TARGET) ---
 search_query = user_input
 found_drug_label = ""
 
 if user_input and not df_odi_master.empty:
-    # Fuzzy search sui farmaci
     matches = df_odi_master[
         df_odi_master['Generic_Name'].str.contains(user_input, case=False, na=False) | 
         df_odi_master['Brand_Names'].str.contains(user_input, case=False, na=False)
@@ -68,11 +63,11 @@ if user_input and not df_odi_master.empty:
     if not matches.empty:
         drug_row = matches.iloc[0]
         found_drug_label = f"{drug_row['Generic_Name']} ({drug_row['Brand_Names']})"
-        # Traduzione in Target biologico
+        # Estrazione target dal farmaco
         search_query = str(drug_row['Targets']).split('(')[0].split(';')[0].strip().upper()
-        st.sidebar.success(f"Farmaco: {drug_row['Generic_Name']} ➔ Hub: {search_query}")
+        st.sidebar.success(f"Mappato su: **{search_query}**")
 
-# --- 5. CARICAMENTO DATI SATELLITI ---
+# --- 5. QUERY SATELLITI ---
 gci_df, pmi_df, odi_target_df, filtered_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 if search_query:
@@ -85,49 +80,52 @@ if search_query:
         odi_target_df = pd.DataFrame(res_odi.data)
     except: pass
 
+    # Logica robusta per filtered_df (per ragnatela)
     if not df_axon.empty:
         all_t = df_axon['target_id'].tolist()
         if search_query in all_t:
+            # Prendi il target + i 6 hub più vicini per creare una rete
             idx = all_t.index(search_query)
-            # Selezione vicini per la ragnatela
-            neighbor_indices = range(max(0, idx-3), min(len(all_t), idx+4))
-            neighbors = [all_t[i] for i in neighbor_indices]
-            filtered_df = df_axon[df_axon['target_id'].isin(neighbors)]
+            neighbor_list = all_t[max(0, idx-3):min(len(all_t), idx+4)]
+            filtered_df = df_axon[df_axon['target_id'].isin(neighbor_list)]
         else:
             filtered_df = df_axon[df_axon['target_id'].str.contains(search_query, na=False)]
 else:
     if not df_axon.empty:
-        filtered_df = df_axon[(df_axon['initial_score'] >= min_sig) & (df_axon['toxicity_index'] <= max_t)]
+        filtered_df = df_axon[(df_axon['initial_score'] >= min_sig) & (df_axon['toxicity_index'] <= max_t)].head(10)
 
 # --- 6. OPERA DIRECTOR (GRIGLIA COMPLETA) ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
+
+if search_query:
+    st.markdown(f"### 🧬 Target Intelligence ID: `{search_query}`")
+    if found_drug_label:
+        st.info(f"💊 **Correlazione Farmaco rilevata:** {found_drug_label}")
 
 if search_query and not df_axon.empty:
     target_data = df_axon[df_axon['target_id'] == search_query]
     if not target_data.empty:
         row = target_data.iloc[0]
-        st.markdown(f"## 🎼 Opera Director: {search_query}")
-        if found_drug_label:
-            st.info(f"🧬 **Focus Farmaco:** {found_drug_label}")
         
-        # Grid 10 Parametri (5x2)
+        # Grid 10 Parametri
         st.markdown("##### ⚙️ Meccanica & Sicurezza")
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("OMI", "DETECTED")
-        c2.metric("SMI", f"{len(pmi_df)} Linked")
-        c3.metric("ODI", "TARGETABLE" if not odi_target_df.empty else "NO DRUG")
-        c4.metric("TMI", f"{row['toxicity_index']:.2f}", delta_color="inverse")
-        c5.metric("CES", f"{row['ces_score']:.2f}")
+        c1.metric("OMI (Target)", "DETECTED")
+        c2.metric("SMI (Pathway)", f"{len(pmi_df)} Linked")
+        c3.metric("ODI (Drug)", "TARGETABLE" if not odi_target_df.empty else "NO DRUG")
+        c4.metric("TMI (Tox)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
+        c5.metric("CES (Score)", f"{row['ces_score']:.2f}")
 
         st.markdown("##### 🌍 Ambiente & Host")
         c6, c7, c8, c9, c10 = st.columns(5)
-        c6.metric("BCI", "OPTIMAL"); c7.metric("GNI", "STABLE"); c8.metric("EVI", "LOW RISK"); c9.metric("MBI", "RESILIENT")
+        c6.metric("BCI", "OPTIMAL"); c7.metric("GNI", "STABLE"); c8.metric("EVI", "LOW RISK"); c9.metric("MBI", "BALANCED")
         phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
-        c10.metric("GCI", phase)
+        c10.metric("GCI (Clinica)", phase)
         st.divider()
 
-# --- 7. RAGNATELA DINAMICA CON COLLEGAMENTI ---
+# --- 7. RAGNATELA DINAMICA (SOLE-HUB) ---
 st.subheader("🕸️ Network Interaction Map")
+
 if not filtered_df.empty:
     G = nx.Graph()
     for _, r in filtered_df.iterrows():
@@ -149,37 +147,33 @@ if not filtered_df.empty:
             x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
             edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
     
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.2, color='#888'), mode='lines', hoverinfo='none')
-    
-    node_x, node_y, node_color, node_size = [], [], [], []
-    for n in G.nodes():
-        x, y = pos[n]; node_x.append(x); node_y.append(y)
-        node_color.append(G.nodes[n]['color']); node_size.append(G.nodes[n]['size'])
-
-    node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=list(G.nodes()), textposition="top center",
-                            marker=dict(showscale=True, colorscale='RdYlGn_r', color=node_color, size=node_size, line=dict(color='white', width=2)))
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#888'), mode='lines', hoverinfo='none')
+    node_trace = go.Scatter(x=[pos[n][0] for n in G.nodes()], y=[pos[n][1] for n in G.nodes()], 
+                            mode='markers+text', text=list(G.nodes()), textposition="top center",
+                            marker=dict(showscale=True, colorscale='RdYlGn_r', 
+                                        color=[G.nodes[n]['color'] for n in G.nodes()], 
+                                        size=[G.nodes[n]['size'] for n in G.nodes()], 
+                                        line=dict(color='white', width=2)))
 
     fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
                     xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'))
     st.plotly_chart(fig, use_container_width=True)
 
-# --- 8. DATABASE DEEP DIVE ---
+# --- 8. DATABASE DEEP Analysis ---
 st.divider()
-st.subheader("🧪 Multi-Database Deep Analysis")
-p_odi, p_pmi, p_gci = st.columns(3)
-with p_odi:
+t_odi, t_pmi, t_gci = st.columns(3)
+with t_odi:
     st.markdown("##### 💊 ODI Therapeutics")
     if not odi_target_df.empty: st.dataframe(odi_target_df[['Generic_Name', 'Brand_Names', 'Drug_Class']], use_container_width=True)
-with p_pmi:
+with t_pmi:
     st.markdown("##### 🧬 PMI Pathways")
     if not pmi_df.empty:
         for _, p in pmi_df.iterrows():
             with st.expander(f"Pathway: {p['Canonical_Name']}"):
-                st.write(f"**Descrizione:** {p.get('Description_L0', 'N/D')}")
-with p_gci:
-    st.markdown("##### 🧪 GCI Clinical")
+                st.write(f"**Descrizione:** {p.get('Description_L0', 'Dettagli non disponibili')}")
+with t_gci:
+    st.markdown("##### 🧪 GCI Clinical Trials")
     if not gci_df.empty: st.dataframe(gci_df[['Canonical_Title', 'Phase']], use_container_width=True)
 
-st.divider()
-st.caption("MAESTRO Suite | Omni-Search Engine v11.1 | Syntax Fixed | RUO")
+st.caption("MAESTRO Suite | Engine v11.2 | RUO")
