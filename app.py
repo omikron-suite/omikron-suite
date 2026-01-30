@@ -209,3 +209,45 @@ else:
 
 
 # ... (fine del codice della ragnatela) ...
+
+
+# --- INTEGRAZIONE GCI DATABASE ---
+    if search_query:
+        st.divider()
+        st.header(f"📑 Evidence Report: {search_query}")
+        
+        try:
+            # Cerchiamo il target nelle colonne chiave del tuo file GCI
+            clinical_res = supabase.table("clinical_trials").select("*").or_(
+                f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
+            ).execute()
+            
+            trials = pd.DataFrame(clinical_res.data)
+            
+            if not trials.empty:
+                # Metriche basate sulle tue colonne reali
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.metric("Trial Totali", len(trials))
+                with m2:
+                    # Usiamo la tua colonna 'Practice_Changing'
+                    pc_count = len(trials[trials['Practice_Changing'] == 'Yes'])
+                    st.metric("Practice Changing", pc_count)
+                with m3:
+                    # Usiamo la colonna 'Phase'
+                    top_phase = trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A"
+                    st.metric("Fase Prevalente", top_phase)
+
+                # Tabella Dettagliata con le tue colonne
+                st.subheader("Dettaglio Studi Clinici (GCI Database)")
+                # Selezioniamo solo le colonne che esistono nel tuo CSV
+                cols_to_show = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
+                # Filtriamo solo quelle effettivamente presenti per evitare errori
+                existing_cols = [c for c in cols_to_show if c in trials.columns]
+                
+                st.dataframe(trials[existing_cols], use_container_width=True)
+            else:
+                st.info(f"Nessun trial clinico trovato per '{search_query}'. Prova con 'HER2' o 'PD-L1'.")
+                
+        except Exception as e:
+            st.error(f"Errore di connessione: Verifica che la tabella si chiami 'clinical_trials'. Dettaglio: {e}")
