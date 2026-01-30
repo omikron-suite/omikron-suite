@@ -31,6 +31,15 @@ supabase = create_client(URL, KEY)
 
 @st.cache_data(ttl=600)
 def load_axon():
+
+    # --- DEBUG: CONTROLLO CARICAMENTO ---
+if not df.empty:
+    st.sidebar.success(f"✅ {len(df)} record caricati")
+    if st.sidebar.checkbox("Mostra Anteprima Database"):
+        st.write(df.head(10)) # Mostra le prime 10 righe per vedere i nomi
+else:
+    st.sidebar.error("❌ Il database AXON è vuoto o non collegato")
+    
     try:
         # Carichiamo la tabella axon_knowledge
         res = supabase.table("axon_knowledge").select("*").execute()
@@ -151,3 +160,4 @@ else:
 st.divider()
 st.subheader("🕸️ Network Map & Rankings")
 # [Qui inserisci il tuo codice Plotly/NetworkX già esistente per la ragnatela]
+
