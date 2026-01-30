@@ -79,7 +79,7 @@ with col2:
     top_5 = filtered_df.sort_values('ces_score', ascending=False).head(5)
     st.dataframe(top_5[['target_id', 'ces_score']], use_container_width=True)
 
-# 9. RAGNATELA (AXON Web)
+# --- 9. RAGNATELA (AXON Web) ---
 st.divider()
 st.subheader("🕸️ Network Interaction Map (AXON Web)")
 
@@ -111,49 +111,49 @@ if not filtered_df.empty:
 
     fig_net = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0)))
     st.plotly_chart(fig_net, use_container_width=True)
+else:
+    st.warning("⚠️ Nessun target AXON corrisponde ai filtri.")
 
-
-
+# =========================================================
 # --- 10. INTEGRAZIONE CLINICAL TRIALS (GCI) ---
-    st.write("---") # Linea di separazione visiva sempre presente
-    
-    if search_query:
-        st.info(f"🔍 Avvio ricerca clinica nel database GCI per: {search_query}...")
+# NB: Questo blocco DEVE essere fuori dall' "if not filtered_df.empty"
+# =========================================================
+
+st.markdown("---") # Linea di separazione forzata
+st.subheader("🧪 Clinical Evidence Portal (GCI Database)")
+
+if search_query:
+    st.info(f"Ricerca in corso per il biomarker: **{search_query}**...")
+    try:
+        # Cerchiamo nel database GCI
+        clinical_res = supabase.table("clinical_trials").select("*").or_(
+            f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
+        ).execute()
         
-        try:
-            # Query con operatore 'ilike' per trovare corrispondenze parziali (es. HER2 trova HER2-Low)
-            clinical_res = supabase.table("clinical_trials").select("*").or_(
-                f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
-            ).execute()
+        trials = pd.DataFrame(clinical_res.data)
+
+        if not trials.empty:
+            st.success(f"Trovati {len(trials)} trial clinici nel Database GCI.")
             
-            trials = pd.DataFrame(clinical_res.data)
+            # Layout Metriche
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Trial Totali", len(trials))
+            
+            if 'Practice_Changing' in trials.columns:
+                pc = len(trials[trials['Practice_Changing'].astype(str).str.contains('Yes', case=False, na=False)])
+                m2.metric("Practice Changing", pc)
+            
+            m3.metric("Fase Prevalente", trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A")
 
-            if not trials.empty:
-                st.header(f"📑 Evidence Report Clinico: {search_query}")
-                
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Trial Totali (GCI)", len(trials))
-                
-                # Calcolo Practice Changing
-                if 'Practice_Changing' in trials.columns:
-                    pc_count = len(trials[trials['Practice_Changing'].astype(str).str.contains('Yes', case=False, na=False)])
-                    m2.metric("Practice Changing", pc_count)
-                else:
-                    m2.metric("Practice Changing", "N/A")
-                
-                m3.metric("Fase Prevalente", trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A")
-
-                st.subheader("Dettaglio Studi Clinici (GCI Database)")
-                # Lista colonne desiderate
-                cols_view = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
-                # Filtro solo quelle che esistono davvero nella tabella
-                actual_cols = [c for c in cols_view if c in trials.columns]
-                
-                st.dataframe(trials[actual_cols], use_container_width=True)
-            else:
-                st.warning(f"Nessun trial trovato nel database per '{search_query}'. Verifica che nella tabella 'clinical_trials' i nomi siano corretti.")
-                
-        except Exception as e:
-            st.error(f"⚠️ Errore Tecnico: {e}")
-    else:
-        st.write("💡 Digita un target (es. HER2) nella barra di ricerca per vedere le evidenze cliniche.")
+            # Tabella Dati
+            cols_to_show = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
+            available_cols = [c for c in cols_to_show if c in trials.columns]
+            st.dataframe(trials[available_cols], use_container_width=True)
+        else:
+            st.warning(f"Nessuna evidenza clinica trovata per '{search_query}'.")
+            st.caption("Suggerimento: Prova a cercare 'HER2' o 'PD-1' per testare il database.")
+            
+    except Exception as e:
+        st.error(f"Errore di connessione a 'clinical_trials': {e}")
+else:
+    st.write("Cerca un target nella barra laterale per attivare il report clinico.")
