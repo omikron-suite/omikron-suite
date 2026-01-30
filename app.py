@@ -56,15 +56,29 @@ URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
 supabase = create_client(URL, KEY)
 
-# Nel tuo file app.py
-def load_registry():
-    res = supabase.table("target_registry").select("*").execute()
-    return pd.DataFrame(res.data or [])
+@st.cache_data(ttl=600)
+def load_axon():
+    try:
+        res = supabase.table("axon_knowledge").select("*").execute()
+        d = pd.DataFrame(res.data or [])
+        if d.empty:
+            return d
 
-df_reg = load_registry()
-# Crea una lista di nomi puliti per la sidebar
-if not df_reg.empty:
-    target_choice = st.sidebar.selectbox("🎯 Select Target", options=df_reg['target_id'].tolist())
+        # Normalization
+        d["target_id"] = d["target_id"].astype(str).str.strip().str.upper()
+        d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
+        d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
+
+        # CES Formula: $CES = VTG \times (1 - TMI)$
+        d["ces_score"] = d["initial_score"] * (1.0 - d["toxicity_index"])
+
+        # Optional Description Column
+        if "description_l0" not in d.columns:
+            d["description_l0"] = ""
+
+        return d
+    except Exception as e:
+        return pd.DataFrame({"error": [str(e)]})
 
 def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, max_t: float) -> pd.DataFrame:
     """
@@ -444,9 +458,6 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
 
 
 
