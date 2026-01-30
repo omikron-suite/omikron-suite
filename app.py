@@ -7,7 +7,7 @@ import plotly.express as px
 from datetime import datetime
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="MAESTRO Omikron Suite v20.2", layout="wide")
+st.set_page_config(page_title="MAESTRO Omikron Suite v20.1", layout="wide")
 
 # --- 2. CONNESSIONE ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
@@ -32,8 +32,8 @@ df = load_axon()
 
 # --- 3. SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
-st.sidebar.title("Omikron Control")
-st.sidebar.caption("v20.2 Gold | Intelligence Hub")
+st.sidebar.title("Omikron Control Center")
+st.sidebar.caption("v20.1 Gold Build | PRO")
 
 min_sig = st.sidebar.slider("Soglia Minima VTG", 0.0, 3.0, 0.8)
 max_t = st.sidebar.slider("Limite Tossicità TMI", 0.0, 1.0, 0.8)
@@ -54,7 +54,7 @@ if search_query and not df.empty:
         odi_df = pd.DataFrame(res_odi.data or [])
     except: pass
 
-# --- 5. UI: OPERA DIRECTOR & BIO-DESCRIPTION ---
+# --- 5. UI: OPERA DIRECTOR & ADVANCED INFO ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 if search_query and not df.empty:
@@ -84,10 +84,16 @@ if search_query and not df.empty:
         </div>
         """, unsafe_allow_html=True)
 
-        st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Analisi funzionale del target in corso...')}")
-        
-        report_data = f"TARGET: {search_query}\nVTG: {row['initial_score']}\nMatches: ODI({len(odi_df)}) PMI({len(pmi_df)}) GCI({len(gci_df)})"
-        st.download_button("📥 Esporta Report Hub", report_data, file_name=f"MAESTRO_{search_query}.txt")
+        c_bio, c_clin = st.columns(2)
+        with c_bio:
+            st.warning(f"**🧬 Biological Description L0:**\n\n{row.get('description_l0', 'Analisi funzionale del target in corso: nodo critico per la segnalazione cellulare.')}")
+        with c_clin:
+            phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
+            st.success(f"**🧪 Clinical Intelligence GCI:**\n\nAvanzamento: Phase {phase}. {len(gci_df)} trial attivi rilevati.")
+
+        full_report = f"MAESTRO v20.1 FINAL REPORT\nTarget: {search_query}\nDate: {datetime.now()}\n\n"
+        full_report += f"Bio Description: {row.get('description_l0', 'N/A')}\nTrials: {len(gci_df)}"
+        st.download_button("📥 Esporta Full Intelligence (.txt)", full_report, file_name=f"MAESTRO_{search_query}.txt")
 
 # --- 6. RAGNATELA & RANKING ---
 st.divider()
@@ -120,64 +126,49 @@ if not filtered_df.empty:
         marker=dict(size=[G.nodes[n]["size"] for n in nodes], color=[G.nodes[n]["color"] for n in nodes],
                     colorscale="RdYlGn_r", showscale=True, line=dict(width=1, color='white'))
     ))
-    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=450)
+    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=500)
     st.plotly_chart(fig_net, use_container_width=True)
 
     st.subheader("📊 Hub Signal Ranking")
     fig_bar = px.bar(filtered_df.sort_values("initial_score", ascending=True).tail(15), 
                      x="initial_score", y="target_id", orientation='h',
                      color="toxicity_index", color_continuous_scale="RdYlGn_r", template="plotly_dark")
-    fig_bar.update_layout(height=350, margin=dict(l=0, r=0, t=20, b=0))
+    fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# --- 7. I DATABASE (DENTRO LA RICERCA) ---
-if search_query:
-    st.divider()
-    st.subheader(f"📂 Hub Intelligence Details: {search_query}")
-    col_p, col_d, col_t = st.columns(3)
-    
-    with col_p:
-        st.markdown(f"### 🧬 Pathways ({len(pmi_df)})")
-        if not pmi_df.empty:
-            for _, r in pmi_df.iterrows():
-                with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**"):
-                    st.write(r.get('Description_L0', 'N/A'))
-        else: st.caption("Nessun match Pathway.")
-
-    with col_d:
-        st.markdown(f"### 💊 Therapeutics ({len(odi_df)})")
-        if not odi_df.empty:
-            for _, r in odi_df.iterrows():
-                with st.expander(f"**{r.get('Generic_Name', 'N/D')}**"):
-                    st.write(r.get('Description_L0', 'N/A'))
-        else: st.caption("Nessun match Farmacologico.")
-
-    with col_t:
-        st.markdown(f"### 🧪 Clinical Trials ({len(gci_df)})")
-        if not gci_df.empty:
-            for _, r in gci_df.iterrows():
-                with st.expander(f"Phase {r.get('Phase', 'N/D')} - {r.get('NCT_Number', 'Trial')}"):
-                    st.write(f"**Titolo:** {r.get('Canonical_Title', 'N/D')}")
-        else: st.caption("Nessun trial clinico rilevato.")
-
-# --- 8. REPOSITORY & DISCLAIMER ---
+# --- 7. EXPLANATORY SECTION ---
 st.divider()
 st.subheader("📚 MAESTRO Intelligence Repository")
 exp1, exp2, exp3 = st.columns(3)
-with exp1:
-    with st.expander("🛡️ AXON (OMI/BCI)"):
-        st.write("Analisi gerarchica dei target e costi biologici.")
-with exp2:
-    with st.expander("💊 ODI & PMI"):
-        st.write("Indice farmaceutico e mappatura dei pathway.")
-with exp3:
-    with st.expander("🧪 GCI & TMI"):
-        st.write("Dati clinici NCT e indici di tossicità.")
 
-st.markdown("""
-<div style="background-color: #111; padding: 20px; border-radius: 10px; border: 1px solid #222; margin-top: 20px;">
-    <p style="font-size: 0.75rem; color: #666; text-align: center;">
-        MAESTRO v20.2 | © 2026 Omikron Orchestra Project | RUO - Research Use Only
+with exp1:
+    with st.expander("🛡️ AXON Intelligence (OMI/BCI)"):
+        st.write("""
+        - **OMI (Target Detection):** Conferma l'esistenza di firme biologiche nel database.
+        - **BCI (Biological Cost):** Valuta l'impatto metabolico cellulare.
+        """)
+with exp2:
+    with st.expander("💊 ODI & PMI Systems"):
+        st.write("""
+        - **ODI (Omikron Drug Index):** Database di molecole approvate e meccanismi d'azione.
+        - **PMI (Pathway Map Index):** Reti biochimiche attivate.
+        """)
+with exp3:
+    with st.expander("🧪 GCI & TMI (Clinical/Safety)"):
+        st.write("""
+        - **GCI (Genomic Clinical Index):** Monitoraggio trial clinici NCT.
+        - **TMI (Toxicity Index):** Predizione algoritmica della sicurezza.
+        """)
+
+# --- 8. FOOTER & DISCLAIMER ---
+st.markdown(f"""
+<br><div style="background-color: #111; padding: 20px; border-radius: 10px; border: 1px solid #222;">
+    <p style="font-size: 0.75rem; color: #666; text-align: justify;">
+        <b>RUO LEGAL DISCLAIMER:</b> Strumento ad uso esclusivo di ricerca. Le analisi generate non sostituiscono test clinici validati. 
+        I dati sono estratti da AXON, ODI, PMI e GCI databases.
+    </p>
+    <p style="font-size: 0.75rem; color: #444; text-align: center;">
+        MAESTRO v20.1 | © 2026 Omikron Orchestra Project
     </p>
 </div>
 """, unsafe_allow_html=True)
