@@ -19,6 +19,7 @@ def load_axon():
         res = supabase.table("axon_knowledge").select("*").execute()
         d = pd.DataFrame(res.data)
         if not d.empty:
+            # Calcolo efficacia pesata
             d['ces_score'] = d['initial_score'] * (1 - d['toxicity_index'])
         return d
     except Exception:
@@ -26,11 +27,11 @@ def load_axon():
 
 df = load_axon()
 
-# --- 3. SIDEBAR ---
+# --- 3. SIDEBAR (Pannello di Controllo) ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Omikron Control Center")
 
-# DISCLAIMER SIDEBAR
+# Disclaimer Obbligatorio
 st.sidebar.warning("⚠️ **RESEARCH USE ONLY**\n\nNot for diagnostic or therapeutic use.")
 
 st.sidebar.markdown("### 🎚️ Parametri VTG Gate")
@@ -41,11 +42,12 @@ st.sidebar.divider()
 st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
 search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS").strip().upper()
 
-# Logica di Filtro
+# --- 4. LOGICA DI FILTRO (Hub + Vicini) ---
 if search_query and not df.empty:
     all_targets = df['target_id'].str.upper().tolist()
     if search_query in all_targets:
         idx = all_targets.index(search_query)
+        # Mostriamo il target e i suoi "vicini" nel database
         neighbor_indices = range(max(0, idx-2), min(len(all_targets), idx+3))
         neighbors = [df.iloc[i]['target_id'] for i in neighbor_indices]
         filtered_df = df[df['target_id'].isin(neighbors)]
@@ -54,51 +56,57 @@ if search_query and not df.empty:
 else:
     filtered_df = df[(df['initial_score'] >= min_sig) & (df['toxicity_index'] <= max_t)]
 
-# --- 4. TITOLO PRINCIPALE ---
+# --- TITOLO ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
-st.markdown(f"**Focus Mode:** {search_query if search_query else 'Global View'}")
 
-# --- 5. TARGET SUMMARY CARD (NUOVA SEZIONE) ---
+# --- 5. TARGET SUMMARY CARD + 3D PROTEIN VIEW ---
 if search_query:
     st.divider()
-    # Recupero dati clinici per il riepilogo
-    res_gci = supabase.table("GCI_clinical_trials").select("Phase, Practice_Changing").ilike("Primary_Biomarker", f"%{search_query}%").execute()
-    gci_summary = pd.DataFrame(res_gci.data)
-    
-    # Recupero dati molecolari
     axon_target = df[df['target_id'].str.upper() == search_query]
     
-    m1, m2, m3, m4 = st.columns(4)
+    col_info, col_3d = st.columns([1, 1])
     
-    with m1:
-        score = axon_target['initial_score'].values[0] if not axon_target.empty else "N/D"
-        st.metric("Efficacia AXON (VTG)", f"{score}", help="Potenza del segnale molecolare")
-    
-    with m2:
-        if not gci_summary.empty:
-            max_phase = gci_summary['Phase'].iloc[0] # Prende la prima occorrenza (spesso la più rilevante)
-            st.metric("Stato Clinico (GCI)", max_phase)
-        else:
-            st.metric("Stato Clinico (GCI)", "Pre-Clinico")
-            
-    with m3:
-        tox = axon_target['toxicity_index'].values[0] if not axon_target.empty else 0.5
-        status = "SICURO" if tox < 0.4 else "MODERATO" if tox < 0.7 else "ALTO RISCHIO"
-        st.metric("Profilo Tossicità", status, delta_color="inverse")
+    with col_info:
+        st.subheader(f"Target Intelligence: {search_query}")
+        m1, m2 = st.columns(2)
+        m3, m4 = st.columns(2)
+        
+        with m1:
+            score = axon_target['initial_score'].values[0] if not axon_target.empty else "N/D"
+            st.metric("Efficacia VTG", f"{score}")
+        with m2:
+            tox = axon_target['toxicity_index'].values[0] if not axon_target.empty else 0.5
+            status = "SICURO" if tox < 0.4 else "MODERATO" if tox < 0.7 else "ALTO RISCHIO"
+            st.metric("Profilo Rischio", status)
+        
+        # Recupero rapido fase clinica
+        res_gci = supabase.table("GCI_clinical_trials").select("Phase").ilike("Primary_Biomarker", f"%{search_query}%").execute()
+        with m3:
+            phase = res_gci.data[0]['Phase'] if res_gci.data else "Pre-Clinico"
+            st.metric("Max Clinical Phase", phase)
+        with m4:
+            st.metric("Data Source", "AXON/GCI Hub")
 
-    with m4:
-        practice = "YES" if not gci_summary.empty and "Yes" in gci_summary['Practice_Changing'].values else "NO"
-        st.metric("Practice Changing", practice)
+    with col_3d:
+        # Visualizzatore Proteina PDB
+        pdb_code = axon_target['pdb_id'].values[0] if not axon_target.empty and 'pdb_id' in axon_target.columns else None
+        if pdb_code:
+            st.subheader(f"Struttura 3D (PDB: {pdb_code})")
+            # Integrazione Mol* viewer ufficiale
+            components_url = f"https://www.rcsb.org/3d-view/{pdb_code}?preset=cartoons"
+            st.components.v1.iframe(components_url, height=400)
+        else:
+            st.info("🧬 Nessuna struttura 3D mappata per questo target.")
 
 # --- 6. ANALISI AXON ---
 st.divider()
-col1, col2 = st.columns([2, 1])
-with col1:
-    st.subheader("Analisi Efficacia vs Tossicità")
+c1, c2 = st.columns([2, 1])
+with c1:
+    st.subheader("Potenza Segnale vs Tossicità")
     if not filtered_df.empty:
         st.plotly_chart(px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index", 
                                color_continuous_scale="RdYlGn_r", template="plotly_dark"), use_container_width=True)
-with col2:
+with c2:
     st.subheader("🥇 Top Efficiency")
     if not filtered_df.empty:
         st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
@@ -110,8 +118,7 @@ if not filtered_df.empty:
     G = nx.Graph()
     for _, row in filtered_df.iterrows():
         is_focus = row['target_id'].upper() == search_query
-        G.add_node(row['target_id'], size=float(row['initial_score']) * (45 if is_focus else 25), 
-                   color=float(row['toxicity_index']))
+        G.add_node(row['target_id'], size=float(row['initial_score']) * (45 if is_focus else 25), color=float(row['toxicity_index']))
     
     nodes = list(G.nodes())
     if search_query in nodes:
@@ -152,13 +159,7 @@ if search_query:
         st.success(f"Trovate {len(gci_df)} evidenze per '{search_query}'")
         cols = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Practice_Changing', 'Key_Results_PFS', 'Main_Toxicities']
         st.dataframe(gci_df[[c for c in cols if c in gci_df.columns]], use_container_width=True)
-    else:
-        st.warning(f"Nessuna evidenza clinica nel Database GCI per '{search_query}'.")
 
 # --- 9. FOOTER ---
 st.divider()
-st.caption("""
-    **Disclaimer:** This platform is for research purposes only (RUO). 
-    Data provided by AXON Knowledge and GCI Database are intended for scientific analysis 
-    and do not constitute medical advice or clinical guidelines.
-""")
+st.caption("Disclaimer: This platform is for research purposes only (RUO). Data provided by AXON and GCI are for scientific analysis.")
