@@ -6,6 +6,13 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="MAESTRO Omikron Suite", layout="wide")
 
+# --- 0. GESTIONE STATE (Click Interattivo) ---
+if 'selected_hub' not in st.session_state:
+    st.session_state.selected_hub = ""
+
+def update_from_search():
+    st.session_state.selected_hub = st.session_state.search_widget.upper()
+
 # --- CONNESSIONE ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
@@ -36,9 +43,16 @@ min_sig = st.sidebar.slider("Soglia Minima Segnale (VTG)", 0.0, 3.0, 0.8)
 max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
 
 st.sidebar.divider()
-st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
-search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS")
-search_query = (search_query or "").strip().upper()
+st.sidebar.markdown("### 🔍 Hub Focus")
+
+# Input di ricerca sincronizzato con il click del grafico
+search_query = st.sidebar.text_input(
+    "Cerca Target o Clicca sul Grafico", 
+    value=st.session_state.selected_hub, 
+    key="search_widget",
+    on_change=update_from_search,
+    placeholder="es. KRAS"
+).strip().upper()
 
 # --- LOGICA CARTELLA FARMACI (SIDEBAR) ---
 odi_df = pd.DataFrame()
@@ -57,7 +71,6 @@ if search_query and not df.empty:
         gci_df = pd.DataFrame(res_gci.data or [])
     except: pass
 
-# Cartella condizionale
 if not odi_df.empty:
     st.sidebar.success(f"📂 **Cartella Farmaci: {len(odi_df)}**")
     with st.sidebar.expander("Apri Cartella ODI"):
@@ -74,11 +87,11 @@ if "error" in df.columns:
     st.error(f"Errore caricamento: {df['error'].iloc[0]}")
     df = pd.DataFrame()
 
-filtered_df = pd.DataFrame()
+# Logica: Se c'è una query, filtro su quella. Se non c'è, mostro i top hub.
 if search_query and not df.empty:
     filtered_df = df[df["target_id"].str.contains(search_query, na=False)]
 else:
-    filtered_df = df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)] if not df.empty else df
+    filtered_df = df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)].sort_values("initial_score", ascending=False).head(15)
 
 # --- UI ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
@@ -96,58 +109,116 @@ if search_query and not df.empty:
         c5.metric("CES", f"{row['ces_score']:.2f}")
         st.divider()
 
-# --- RAGNATELA MULTI-NODO ---
+# --- RAGNATELA INTERATTIVA (CLICK-TO-OPEN) ---
 st.subheader("🕸️ Network Interaction Map")
 
 
 if not filtered_df.empty:
     G = nx.Graph()
-    # Aggiunta Nodi Target
+    
+    # 1. Aggiunta Nodi Target (Nucleo)
     for _, r in filtered_df.iterrows():
         tid = r["target_id"]
         is_hub = (tid == search_query)
-        G.add_node(tid, size=float(r["initial_score"]) * (55 if is_hub else 30), 
-                   color=float(r["toxicity_index"]), type="target")
+        # Se è l'hub cercato è Oro, altrimenti Grigio/Verde
+        color_node = 'gold' if is_hub else float(r["toxicity_index"])
+        size_node = 60 if is_hub else 30
+        
+        G.add_node(tid, size=size_node, color=color_node, type="target", label=tid)
 
-    # Aggiunta Nodi Satellite se Hub selezionato
-    if search_query in G.nodes:
-        # Satelliti Farmaci
-        for _, drug in odi_df.head(3).iterrows():
+    # 2. LOGICA LINK: Disegno linee SOLO se c'è un Hub selezionato (search_query attiva)
+    if search_query and search_query in G.nodes:
+        
+        # A. Satelliti Farmaci (Solo se Hub attivo)
+        for _, drug in odi_df.head(5).iterrows():
             d_name = f"💊 {drug['Generic_Name']}"
-            G.add_node(d_name, size=25, color=0.2, type="drug")
-            G.add_edge(search_query, d_name)
-        # Satelliti Pathway
-        for _, path in pmi_df.head(2).iterrows():
+            G.add_node(d_name, size=25, color='skyblue', type="drug", label=d_name)
+            G.add_edge(search_query, d_name) # Link Hub-Farmaco
+            
+        # B. Satelliti Pathway (Solo se Hub attivo)
+        for _, path in pmi_df.head(3).iterrows():
             p_name = f"🧬 {path['Canonical_Name']}"
-            G.add_node(p_name, size=25, color=0.8, type="pathway")
-            G.add_edge(search_query, p_name)
+            G.add_node(p_name, size=25, color='violet', type="pathway", label=p_name)
+            G.add_edge(search_query, p_name) # Link Hub-Pathway
 
-    # Link tra Hub e Target vicini
-    nodes = list(G.nodes())
-    if search_query in nodes:
+        # C. Link tra Hub e altri Target vicini
+        nodes = list(G.nodes())
         for n in nodes:
             if n != search_query and G.nodes[n].get("type") == "target":
-                G.add_edge(search_query, n)
+                G.add_edge(search_query, n) # Link Hub-TargetVicino
 
-    pos = nx.spring_layout(G, k=1.3, seed=42)
+    # Calcolo Layout
+    # Se non c'è hub, layout più sparso. Se c'è hub, layout centrato.
+    k_val = 1.2 if search_query else 2.0 
+    pos = nx.spring_layout(G, k=k_val, seed=42)
+    
     edge_x, edge_y = [], []
     for a, b in G.edges():
         x0, y0 = pos[a]; x1, y1 = pos[b]
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
 
     fig_net = go.Figure()
-    fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(width=1, color='#888'), hoverinfo="none"))
+    
+    # TRACCIA LINEE (Solo se ci sono edges)
+    if edge_x:
+        fig_net.add_trace(go.Scatter(
+            x=edge_x, y=edge_y, 
+            mode="lines", 
+            line=dict(width=1.5, color='#888'), 
+            hoverinfo="none"
+        ))
+    
+    # TRACCIA NODI
+    # Gestiamo i colori: se è numerico usa scala, se stringa (es. gold/skyblue) usa mappa
+    node_colors = []
+    for n in G.nodes():
+        c = G.nodes[n].get("color", 0.5)
+        node_colors.append(c)
+
+    # Nota: Per semplicità visiva qui uso una logica ibrida per i colori
+    # Se è un target non selezionato, usa la scala cromatica della tossicità
+    
     fig_net.add_trace(go.Scatter(
-        x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
-        mode="markers+text", text=nodes, textposition="top center",
-        marker=dict(size=[G.nodes[n].get("size", 25) for n in nodes],
-                    color=[G.nodes[n].get("color", 0.5) for n in nodes],
-                    colorscale="RdYlGn_r", showscale=True, line=dict(width=1.5, color='white'))
+        x=[pos[n][0] for n in G.nodes()], 
+        y=[pos[n][1] for n in G.nodes()],
+        mode="markers+text", 
+        text=[G.nodes[n].get('label', n) for n in G.nodes()], 
+        textposition="top center",
+        marker=dict(
+            size=[G.nodes[n].get("size", 30) for n in G.nodes()],
+            # Qui semplifico: se è float usa scala, se no grigio default (sovrascritto da logica complessa se necessario)
+            color=[c if isinstance(c, float) else 0.1 for c in node_colors], 
+            colorscale="RdYlGn_r", 
+            showscale=False, 
+            line=dict(width=2, color='white')
+        )
     ))
 
-    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
-    st.plotly_chart(fig_net, use_container_width=True)
+    # Configurazione Interattività
+    fig_net.update_layout(
+        showlegend=False, 
+        margin=dict(b=0,l=0,r=0,t=0), 
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), 
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        clickmode='event+select' # Abilita il click
+    )
+    
+    # --- IL CUORE DELL'INTERATTIVITÀ ---
+    # on_select="rerun" ricarica l'app quando clicchi un punto
+    selection = st.plotly_chart(fig_net, use_container_width=True, on_select="rerun", selection_mode="points")
+    
+    # Gestione del Click
+    if selection and selection["selection"]["points"]:
+        clicked_node_text = selection["selection"]["points"][0]["text"]
+        # Pulizia del testo (rimuovi emoji se presenti per ottenere l'ID pulito)
+        clean_id = clicked_node_text.replace("🎯 ", "").replace("💊 ", "").replace("🧬 ", "").split(" ")[0]
+        
+        # Se clicco su un nodo diverso da quello attuale, aggiorno
+        if clean_id != st.session_state.selected_hub:
+            st.session_state.selected_hub = clean_id
+            st.rerun() # Forza il ricaricamento immediato per mostrare le linee
 
 # --- PORTALI DATI ---
 st.divider()
@@ -163,4 +234,4 @@ with p_gci:
     if not gci_df.empty and cols:
         st.dataframe(gci_df[cols], use_container_width=True)
 
-st.caption("MAESTRO Suite | Integrated v15.5 | RUO")
+st.caption("MAESTRO Suite | Integrated v16.0 (Interactive) | RUO")
