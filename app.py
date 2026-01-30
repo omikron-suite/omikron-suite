@@ -14,14 +14,14 @@ st.markdown("""
 <style>
 /* Streamlit main title (st.title) */
 div[data-testid="stAppViewContainer"] h1 {
-    font-size: 1.75rem !important;
+    font-size: 1.75rem !important;   /* was ~2.25rem */
     line-height: 1.15 !important;
     margin-bottom: 0.35rem !important;
 }
 
 /* Section headers from markdown ## and similar */
 div[data-testid="stAppViewContainer"] h2 {
-    font-size: 1.35rem !important;
+    font-size: 1.35rem !important;   /* was ~1.75rem */
     line-height: 1.2 !important;
     margin-top: 0.6rem !important;
     margin-bottom: 0.35rem !important;
@@ -29,7 +29,7 @@ div[data-testid="stAppViewContainer"] h2 {
 
 /* Subheaders / markdown ### */
 div[data-testid="stAppViewContainer"] h3 {
-    font-size: 1.10rem !important;
+    font-size: 1.10rem !important;   /* was ~1.4rem */
     line-height: 1.25 !important;
     margin-top: 0.55rem !important;
     margin-bottom: 0.3rem !important;
@@ -42,13 +42,15 @@ div[data-testid="stAppViewContainer"] [data-testid="stHeader"] {
 </style>
 """, unsafe_allow_html=True)
 
+
+
 # --- 2. CONNECTION (Secrets Recommended) ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
 supabase = create_client(URL, KEY)
 
 @st.cache_data(ttl=600)
-def load_axon() -> pd.DataFrame:
+def load_axon():
     try:
         res = supabase.table("axon_knowledge").select("*").execute()
         d = pd.DataFrame(res.data or [])
@@ -60,7 +62,7 @@ def load_axon() -> pd.DataFrame:
         d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
         d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
 
-        # CES Formula: CES = VTG * (1 - TMI)
+        # CES Formula: $CES = VTG \times (1 - TMI)$
         d["ces_score"] = d["initial_score"] * (1.0 - d["toxicity_index"])
 
         # Optional Description Column
@@ -73,7 +75,7 @@ def load_axon() -> pd.DataFrame:
 
 def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, max_t: float) -> pd.DataFrame:
     """
-    Defines "first neighbors" as Top-K candidates ordered by CES (then initial_score),
+    Defines "first neighbors" as Top-K candidates ordered by CES (then initial_score)
     respecting the VTG/TMI filters.
     """
     if df_all.empty or not hub:
@@ -91,123 +93,6 @@ def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, 
     cand = cand.sort_values(["ces_score", "initial_score"], ascending=False).head(int(k))
     return cand
 
-# --------- EXPORT HELPERS (NEW) ---------
-def _safe_cols(df: pd.DataFrame, preferred: list[str]) -> list[str]:
-    return [c for c in preferred if c in df.columns]
-
-def _df_to_markdown_table(df: pd.DataFrame, max_rows: int = 20) -> str:
-    if df is None or df.empty:
-        return "_No data._"
-    return df.head(max_rows).to_markdown(index=False)
-
-def build_hub_report(
-    *,
-    app_title: str,
-    build_id: str,
-    hub: str,
-    hub_row: pd.Series,
-    min_sig: float,
-    max_t: float,
-    top_k: int,
-    neighbors_df: pd.DataFrame,
-    odi_df: pd.DataFrame,
-    pmi_df: pd.DataFrame,
-    gci_df: pd.DataFrame,
-    axon_df_all: pd.DataFrame,
-) -> str:
-    """
-    Builds a detailed TXT report for a given hub/target.
-    Includes filters, hub metrics, neighbors and linked portal previews.
-    """
-
-    ts = datetime.now().isoformat(timespec="seconds")
-
-    lines = []
-    lines.append(f"{app_title}")
-    lines.append(f"Build: {build_id}")
-    lines.append(f"Timestamp: {ts}")
-    lines.append("")
-    lines.append("=== RUO DISCLAIMER ===")
-    lines.append("Research Use Only (RUO). Outputs are exploratory and do not constitute medical advice.")
-    lines.append("")
-
-    lines.append("=== QUERY CONTEXT ===")
-    lines.append(f"Hub/Target: {hub}")
-    lines.append(f"Filters: min_VTG={min_sig:.3f} | max_TMI={max_t:.3f} | topK={int(top_k)}")
-    lines.append("")
-
-    # HUB METRICS
-    lines.append("=== HUB METRICS (AXON) ===")
-    hub_common = _safe_cols(axon_df_all, ["target_id", "initial_score", "toxicity_index", "ces_score", "description_l0"])
-    hub_payload = {}
-    for c in hub_common:
-        hub_payload[c] = hub_row.get(c, "")
-
-    # Optional extra AXON columns (capped)
-    extra_cols = [c for c in axon_df_all.columns if c not in hub_common]
-    extra_cols = [c for c in extra_cols if not str(c).lower().startswith("description_l")]
-    for c in extra_cols[:12]:
-        v = hub_row.get(c, None)
-        if pd.notna(v) and v != "":
-            hub_payload[c] = v
-
-    for k, v in hub_payload.items():
-        lines.append(f"- {k}: {v}")
-    lines.append("")
-
-    # NEIGHBORS
-    lines.append("=== FIRST NEIGHBORS (Top-K by CES) ===")
-    if neighbors_df is None or neighbors_df.empty:
-        lines.append("_No neighbors found under current filters._")
-        lines.append("")
-    else:
-        neigh_cols = _safe_cols(neighbors_df, ["target_id", "ces_score", "initial_score", "toxicity_index"])
-        neigh_view = neighbors_df[neigh_cols].copy() if neigh_cols else neighbors_df.copy()
-        neigh_view = neigh_view.rename(columns={"initial_score": "VTG", "toxicity_index": "TMI", "ces_score": "CES"})
-        lines.append(_df_to_markdown_table(neigh_view, max_rows=int(top_k)))
-        lines.append("")
-
-    # PORTALS
-    def portal_block(name: str, dfp: pd.DataFrame, preferred_cols: list[str], max_rows: int = 10) -> None:
-        lines.append(f"=== {name} ===")
-        n = 0 if dfp is None else len(dfp)
-        lines.append(f"Items linked: {n}")
-        if dfp is None or dfp.empty:
-            lines.append("_No linked items._")
-            lines.append("")
-            return
-        cols = _safe_cols(dfp, preferred_cols)
-        preview = dfp[cols].head(max_rows) if cols else dfp.head(max_rows)
-        lines.append(_df_to_markdown_table(preview, max_rows=max_rows))
-        lines.append("")
-
-    portal_block(
-        "ODI (Therapeutics)",
-        odi_df,
-        preferred_cols=["Generic_Name", "Brand_Names", "Drug_Class", "Modality", "Mechanism_Short", "Targets", "Regulatory_Status_US", "Regulatory_Status_EU"],
-        max_rows=10
-    )
-    portal_block(
-        "PMI (Pathways)",
-        pmi_df,
-        preferred_cols=["Canonical_Name", "Key_Targets", "Mechanism_Category", "Mechanism_Subtype", "Description_L0"],
-        max_rows=10
-    )
-    portal_block(
-        "GCI (Clinical Trials)",
-        gci_df,
-        preferred_cols=["Phase", "Year", "NCT_Number", "ClinicalTrials_ID", "Canonical_Title", "Cancer_Type", "Primary_Biomarker", "Primary_Endpoint"],
-        max_rows=10
-    )
-
-    lines.append("=== REPRODUCIBILITY NOTES ===")
-    lines.append("Neighbor selection is performed by sorting candidates by CES (then VTG), after applying VTG/TMI filters.")
-    lines.append("Portal linkage is retrieved by ILIKE matching the hub string against Primary_Biomarker / Key_Targets / Targets fields.")
-    lines.append("")
-
-    return "\n".join(lines)
-
-# --- LOAD MAIN AXON DATA ---
 df = load_axon()
 
 # --- 3. SIDEBAR ---
@@ -231,6 +116,7 @@ top_k = st.sidebar.slider(
     help="Number of neighboring partners to display around the selected hub."
 )
 
+# SIDEBAR DISCLAIMER
 st.sidebar.markdown("""
 <div style="background-color: #1a1a1a; padding: 12px; border-radius: 8px; border-left: 4px solid #ff4b4b; margin-top: 10px;">
     <p style="font-size: 0.75rem; color: #ff4b4b; font-weight: bold; margin-bottom: 5px;">⚠️ RUO STATUS</p>
@@ -293,12 +179,14 @@ else:
 
             st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Functional target analysis in progress: critical signaling hub detected.')}")
 
+            # --- FIRST NEIGHBORS (Top-K) ---
             neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
 
             st.markdown("### 🔗 First Neighbors (Hub Context)")
             if neighbors_df.empty:
                 st.info("No neighbors found with current filters. Try lowering VTG or increasing TMI.")
             else:
+                # Compact Chips
                 chips = []
                 for _, r in neighbors_df.iterrows():
                     chips.append(
@@ -310,8 +198,179 @@ else:
                 show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
                 st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
 
-            # --- EXPORT (IMPROVED) ---
-            report_txt = build_hub_report(
-                app_title="MAESTRO Omikron Suite",
-                build_id="v2.6.2 build 2630012026",
-                hub=search_query,
+            full_report = f"MAESTRO v20.6 REPORT\nTarget: {search_query}\nDate: {datetime.now()}"
+            st.download_button("📥 Export Full Intelligence (.txt)", full_report, file_name=f"MAESTRO_{search_query}.txt")
+
+# --- 6. NETWORK MAP & RANKING ---
+st.divider()
+
+if df.empty or ("error" in df.columns):
+    st.stop()
+
+# Hub Mode: network = hub + neighbors
+if search_query:
+    neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
+    hub_df = df[df["target_id"] == search_query]
+    if not hub_df.empty and not neighbors_df.empty:
+        filtered_df = pd.concat([hub_df, neighbors_df], ignore_index=True)
+    else:
+        filtered_df = hub_df
+else:
+    filtered_df = df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)]
+
+if not filtered_df.empty:
+    st.subheader("🕸️ Network Interaction Map")
+    
+    
+
+    G = nx.Graph()
+
+    # Nodes
+    for _, r in filtered_df.iterrows():
+        tid = r["target_id"]
+        is_hub = bool(search_query) and (tid == search_query)
+        G.add_node(
+            tid,
+            size=float(r["initial_score"]) * (70 if is_hub else 35),
+            color=float(r["toxicity_index"]),
+            is_hub=is_hub
+        )
+
+    nodes = list(G.nodes())
+
+    # Edges
+    if search_query and search_query in nodes:
+        for n in nodes:
+            if n != search_query:
+                G.add_edge(search_query, n)
+    elif len(nodes) > 1:
+        for i in range(len(nodes) - 1):
+            G.add_edge(nodes[i], nodes[i + 1])
+
+    pos = nx.spring_layout(G, k=1.1, seed=42)
+
+    edge_x, edge_y = [], []
+    for a, b in G.edges():
+        x0, y0 = pos[a]
+        x1, y1 = pos[b]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+
+    fig_net = go.Figure()
+    fig_net.add_trace(go.Scatter(
+        x=edge_x, y=edge_y, mode="lines",
+        line=dict(color="#444", width=0.9),
+        hoverinfo="none"
+    ))
+
+    fig_net.add_trace(go.Scatter(
+        x=[pos[n][0] for n in nodes],
+        y=[pos[n][1] for n in nodes],
+        mode="markers+text",
+        text=nodes,
+        textposition="top center",
+        textfont=dict(size=10, color="white"),
+        marker=dict(
+            size=[G.nodes[n]["size"] for n in nodes],
+            color=[G.nodes[n]["color"] for n in nodes],
+            colorscale="RdYlGn_r",
+            showscale=True,
+            line=dict(
+                width=[3 if G.nodes[n].get("is_hub") else 1 for n in nodes],
+                color="white"
+            )
+        ),
+        hovertemplate="<b>%{text}</b><extra></extra>"
+    ))
+
+    fig_net.update_layout(
+        showlegend=False,
+        margin=dict(b=0, l=0, r=0, t=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=500
+    )
+    st.plotly_chart(fig_net, use_container_width=True)
+
+    st.subheader("📊 Hub Signal Ranking")
+    
+    
+
+    fig_bar = px.bar(
+        filtered_df.sort_values("initial_score", ascending=True).tail(15),
+        x="initial_score",
+        y="target_id",
+        orientation="h",
+        color="toxicity_index",
+        color_continuous_scale="RdYlGn_r",
+        template="plotly_dark"
+    )
+    fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
+    st.plotly_chart(fig_bar, use_container_width=True)
+else:
+    st.info("No data available with current filters.")
+
+# --- 7. HUB INTELLIGENCE DESK ---
+if search_query:
+    st.divider()
+    st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
+    c_odi, c_gci, c_pmi = st.columns(3)
+
+    with c_odi:
+        st.markdown(f"### 💊 Therapeutics (ODI: {len(odi_df)})")
+        if not odi_df.empty:
+            for _, r in odi_df.iterrows():
+                with st.expander(f"**{r.get('Generic_Name', 'N/A')}**"):
+                    st.write(f"**Class:** {r.get('Drug_Class', 'N/A')}")
+                    st.write(f"**Mechanism:** {r.get('Description_L0', 'Details not available.')}")
+                    st.caption(f"Status: {r.get('Regulatory_Status_US', 'N/A')}")
+        else:
+            st.info("No ODI items found.")
+
+    with c_gci:
+        st.markdown(f"### 🧪 Clinical Trials (GCI: {len(gci_df)})")
+        if not gci_df.empty:
+            for _, r in gci_df.iterrows():
+                with st.expander(f"**Phase {r.get('Phase', 'N/A')} Trial**"):
+                    st.write(f"**ID:** {r.get('NCT_Number', 'N/A')}")
+                    st.write(f"**Title:** {r.get('Canonical_Title', 'Details not available.')}")
+        else:
+            st.info("No GCI trials found.")
+
+    with c_pmi:
+        st.markdown(f"### 🧬 Pathways (PMI: {len(pmi_df)})")
+        if not pmi_df.empty:
+            for _, r in pmi_df.iterrows():
+                with st.expander(f"**{r.get('Canonical_Name', 'N/A')}**"):
+                    st.write(f"**Detail:** {r.get('Description_L0', 'Details not available.')}")
+        else:
+            st.info("No PMI pathways found.")
+
+# --- 8. FOOTER & DISCLAIMER ---
+st.divider()
+st.subheader("📚 MAESTRO Intelligence Repository")
+exp1, exp2, exp3 = st.columns(3)
+with exp1:
+    with st.expander("🛡️ AXON Intelligence (OMI/BCI)"):
+        st.write("OMI: Target Detection Hub. BCI: Biological Cost Index.")
+with exp2:
+    with st.expander("💊 ODI & PMI Systems"):
+        st.write("ODI: Pharmaceutical Database. PMI: Pathway Mappings.")
+with exp3:
+    with st.expander("🧪 GCI & TMI (Clinical/Safety)"):
+        st.write("GCI: Clinical Trial Monitoring. TMI: Toxicity Index.")
+
+st.markdown(f"""
+<div style="background-color: #0e1117; padding: 25px; border-radius: 12px; border: 1px solid #333; text-align: center; max-width: 900px; margin: 0 auto; margin-top: 20px;">
+    <h4 style="color: #ff4b4b; margin-top: 0;">⚠️ SCIENTIFIC AND LEGAL DISCLAIMER</h4>
+    <p style="font-size: 0.8rem; color: #888; text-align: justify; line-height: 1.5;">
+        <b>MAESTRO Omikron Suite</b> is intended exclusively for Research Use Only (RUO). 
+        Generated analyses do not replace medical advice. Data reflects the current state of Omikron databases.
+    </p>
+    <p style="font-size: 0.75rem; color: #444; margin-top: 15px;">
+        MAESTRO v20.6 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+
