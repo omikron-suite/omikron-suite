@@ -6,14 +6,14 @@ import networkx as nx
 import plotly.graph_objects as go
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="MAESTRO Omikron Ultra", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="MAESTRO Omikron Ultra", layout="wide")
 
 # --- 2. CONNESSIONE SUPABASE ---
 URL = "https://zwpahhbxcugldxchiunv.supabase.co"
 KEY = "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1"
 supabase = create_client(URL, KEY)
 
-# --- 3. MOTORE DI CARICAMENTO DATI (CON PROTEZIONE) ---
+# --- 3. MOTORE CARICAMENTO DATI ---
 @st.cache_data(ttl=600)
 def load_axon():
     try:
@@ -34,29 +34,33 @@ def load_satellite(table, column, query):
 
 df_axon = load_axon()
 
-# --- 4. SIDEBAR ---
-st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=80)
-st.sidebar.title("MAESTRO Control")
-search_query = st.sidebar.text_input("🔍 Ricerca Target Hub", "").strip().upper()
-st.sidebar.markdown("### 🎚️ Soglie Critiche")
-min_sig = st.sidebar.slider("Segnale VTG", 0.0, 3.0, 0.8)
-max_t = st.sidebar.slider("Tossicità TMI", 0.0, 1.0, 0.8)
-st.sidebar.divider()
-st.sidebar.warning("⚠️ **RESEARCH USE ONLY**")
+# --- 4. HEADER & COMANDI CENTRALI (No Sidebar) ---
+st.title("🛡️ MAESTRO: Omikron Orchestra")
+st.caption("Intelligence Suite v4.2 | Research Use Only")
 
-# --- 5. LOGICA DI INTELLIGENCE (Sempre Inizializzata) ---
-gci_df = pd.DataFrame()
-odi_df = pd.DataFrame()
-pmi_df = pd.DataFrame()
+# Search Bar Centrale
+search_query = st.text_input("🔍 Inserisci Biomarker Hub (es. PDCD1, HER2, EGFR)", "").strip().upper()
+
+# Parametri distribuiti in colonne orizzontali
+st.markdown("##### 🎚️ Soglie di Controllo")
+s1, s2, s3 = st.columns([2, 2, 1])
+min_sig = s1.slider("Segnale VTG", 0.0, 3.0, 0.8)
+max_t = s2.slider("Tossicità TMI", 0.0, 1.0, 0.8)
+s3.write("") # Spazio per allineamento
+if s3.button("Reset View", use_container_width=True):
+    st.rerun()
+
+st.divider()
+
+# --- 5. LOGICA DI INTELLIGENCE ---
+gci_df, odi_df, pmi_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 filtered_df = pd.DataFrame()
 
 if search_query and not df_axon.empty:
-    # Caricamento dati dai 3 database satelliti
     gci_df = load_satellite("GCI_clinical_trials", "Primary_Biomarker", search_query)
     odi_df = load_satellite("odi_database", "Targets", search_query)
     pmi_df = load_satellite("pmi_database", "Key_Targets", search_query)
 
-    # Filtro Dinamico
     all_t = df_axon['target_id'].tolist()
     if search_query in all_t:
         idx = all_t.index(search_query)
@@ -68,16 +72,14 @@ else:
     if not df_axon.empty:
         filtered_df = df_axon[(df_axon['initial_score'] >= min_sig) & (df_axon['toxicity_index'] <= max_t)]
 
-# --- 6. OPERA DIRECTOR ---
-st.title("🛡️ MAESTRO: Omikron Orchestra")
-
+# --- 6. OPERA DIRECTOR (GRIGLIA CHIRURGICA) ---
 if search_query and not df_axon.empty:
     t_info = df_axon[df_axon['target_id'] == search_query]
     if not t_info.empty:
         row = t_info.iloc[0]
         st.markdown(f"## 🎼 Opera Director: {search_query}")
         
-        # Griglia 10 Parametri
+        # Grid 10 Pilastri
         st.markdown("##### ⚙️ Meccanica & Sicurezza")
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("OMI (Biomarker)", "DETECTED")
@@ -95,45 +97,39 @@ if search_query and not df_axon.empty:
         phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "PRE-CLIN"
         c10.metric("GCI (Clinica)", phase)
         
-        # --- 7. VISUALIZZATORE 3D & EXPORT ---
+        # 3D & Export
         col_3d, col_rep = st.columns([2, 1])
         with col_3d:
-            # Controllo se pdb_id esiste nella riga
             pdb_id = row.get('pdb_id') if 'pdb_id' in row else None
             if pdb_id and str(pdb_id) != 'nan':
                 st.markdown(f"**🧬 Struttura Molecolare (PDB: {pdb_id})**")
                 url_3d = f"https://www.ncbi.nlm.nih.gov/Structure/icn3d/full.html?pdbid={pdb_id}&width=600&height=300&showcommand=0"
                 st.components.v1.iframe(url_3d, height=350)
-            else:
-                st.info("🧬 Dati strutturali PDB non ancora mappati per questo hub.")
         with col_rep:
             st.markdown("**📄 Intelligence Export**")
             rep_txt = f"REPORT: {search_query}\nCES: {row['ces_score']:.2f}\nPhase: {phase}"
             st.download_button("📥 Scarica Report", rep_txt, file_name=f"MAESTRO_{search_query}.txt", use_container_width=True)
         st.divider()
 
-# --- 8. VISUALIZZAZIONE HUB & NETWORK ---
-tab_net, tab_data = st.tabs(["🕸️ Network Interaction Map", "📊 Comparative Analysis"])
+# --- 7. VISUALIZZAZIONE HUB & NETWORK ---
+if not filtered_df.empty:
+    tab_net, tab_data = st.tabs(["🕸️ Network Interaction Map", "📊 Comparative Analysis"])
 
-with tab_net:
-    if not filtered_df.empty:
+    with tab_net:
         G = nx.Graph()
         for _, r in filtered_df.iterrows():
             is_f = r['target_id'].upper() == search_query
             G.add_node(r['target_id'], size=float(r['initial_score']) * (50 if is_f else 30), color=float(r['toxicity_index']))
-        
         nodes = list(G.nodes())
         if search_query in nodes:
             for n in nodes: 
                 if n != search_query: G.add_edge(search_query, n)
-        
         if nodes:
             pos = nx.spring_layout(G, k=0.9, seed=42)
             edge_x, edge_y = [], []
             for e in G.edges():
                 x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
                 edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
-            
             fig_net = go.Figure(data=[
                 go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='#555'), mode='lines', hoverinfo='none'),
                 go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes], mode='markers+text', 
@@ -145,8 +141,7 @@ with tab_net:
                                   xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
             st.plotly_chart(fig_net, use_container_width=True)
 
-with tab_data:
-    if not filtered_df.empty:
+    with tab_data:
         c_bar, c_rank = st.columns([2, 1])
         with c_bar:
             st.plotly_chart(px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index", 
@@ -154,28 +149,19 @@ with tab_data:
         with c_rank:
             st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
 
-# --- 9. DEEP DATA PORTALS ---
-st.divider()
-st.subheader("🧪 Multi-Database Deep Dive")
-p1, p2, p3 = st.columns(3)
-
-with p1:
-    st.markdown("##### 💊 ODI (Therapeutics)")
-    if not odi_df.empty:
-        st.dataframe(odi_df[['Generic_Name', 'Drug_Class', 'Regulatory_Status_US']], use_container_width=True)
-    else: st.caption("No therapeutic data found.")
-
-with p2:
-    st.markdown("##### 🧬 PMI (Pathways)")
-    if not pmi_df.empty:
-        st.dataframe(pmi_df[['Canonical_Name', 'Category', 'Evidence_Priority']], use_container_width=True)
-    else: st.caption("No pathway mapping.")
-
-with p3:
-    st.markdown("##### 🧪 GCI (Clinical)")
-    if not gci_df.empty:
-        st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
-    else: st.caption("No trial evidence.")
+# --- 8. PORTALI DATI ---
+if search_query:
+    st.divider()
+    p1, p2, p3 = st.columns(3)
+    with p1:
+        st.markdown("##### 💊 ODI (Therapeutics)")
+        if not odi_df.empty: st.dataframe(odi_df[['Generic_Name', 'Drug_Class', 'Regulatory_Status_US']], use_container_width=True)
+    with p2:
+        st.markdown("##### 🧬 PMI (Pathways)")
+        if not pmi_df.empty: st.dataframe(pmi_df[['Canonical_Name', 'Category', 'Evidence_Priority']], use_container_width=True)
+    with p3:
+        st.markdown("##### 🧪 GCI (Clinical)")
+        if not gci_df.empty: st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
 
 st.divider()
-st.caption("MAESTRO Ultra Suite v4.1 | Quad-Engine Cloud Integration | RUO")
+st.caption("MAESTRO Ultra Suite v4.2 | Quad-Engine Cloud | No-Sidebar Edition")
