@@ -56,7 +56,7 @@ URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
 supabase = create_client(URL, KEY)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=0) # <--- Portiamo il TTL a 0 per forzare l'aggiornamento
 def load_axon():
     try:
         res = supabase.table("axon_knowledge").select("*").execute()
@@ -64,28 +64,20 @@ def load_axon():
         if d.empty:
             return d
 
-        # 1. Normalizzazione stringhe
+        # Pulizia estrema degli spazi e dei nomi
         d["target_id"] = d["target_id"].astype(str).str.strip()
 
-        # --- 2. FILTRO DI PULIZIA (AGGIUNTO QUI) ---
-        # Elenchiamo le scritte che vogliamo far sparire dai grafici
-        voci_da_escludere = [
-            "FORECAST 2.0", 
-            "THERAPEUTIC DEPTH", 
-            "FUEL FLEXIBILITY", 
-            "LACTATE SECRETION",
-            "Target_ID" # Nel caso abbia importato anche l'intestazione
-        ]
-        d = d[~d["target_id"].isin(voci_da_escludere)]
+        # Filtro: teniamo solo le righe dove target_id NON contiene parole da cartella
+        # Questo filtro cerca la parola ovunque, anche se c'è altro testo
+        d = d[~d["target_id"].str.contains("FORECAST|DEPTH|FUEL|LACTATE|Target_ID", case=False, na=False)]
         
-        # 3. Trasformazione in maiuscolo per la ricerca
-        d["target_id"] = d["target_id"].str.upper()
-
-        # 4. Conversione Numerica
+        # Filtro extra: eliminiamo righe dove initial_score è zero (spesso sono righe di test)
         d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
-        d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
+        d = d[d["initial_score"] > 0]
 
-        # CES Formula
+        # Normalizzazione finale
+        d["target_id"] = d["target_id"].str.upper()
+        d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
         d["ces_score"] = d["initial_score"] * (1.0 - d["toxicity_index"])
 
         if "description_l0" not in d.columns:
@@ -473,6 +465,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
