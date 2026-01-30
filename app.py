@@ -64,15 +64,30 @@ def load_axon():
         if d.empty:
             return d
 
-        # Normalization
-        d["target_id"] = d["target_id"].astype(str).str.strip().str.upper()
+        # 1. Normalizzazione stringhe
+        d["target_id"] = d["target_id"].astype(str).str.strip()
+
+        # --- 2. FILTRO DI PULIZIA (AGGIUNTO QUI) ---
+        # Elenchiamo le scritte che vogliamo far sparire dai grafici
+        voci_da_escludere = [
+            "FORECAST 2.0", 
+            "THERAPEUTIC DEPTH", 
+            "FUEL FLEXIBILITY", 
+            "LACTATE SECRETION",
+            "Target_ID" # Nel caso abbia importato anche l'intestazione
+        ]
+        d = d[~d["target_id"].isin(voci_da_escludere)]
+        
+        # 3. Trasformazione in maiuscolo per la ricerca
+        d["target_id"] = d["target_id"].str.upper()
+
+        # 4. Conversione Numerica
         d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
         d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
 
-        # CES Formula: $CES = VTG \times (1 - TMI)$
+        # CES Formula
         d["ces_score"] = d["initial_score"] * (1.0 - d["toxicity_index"])
 
-        # Optional Description Column
         if "description_l0" not in d.columns:
             d["description_l0"] = ""
 
@@ -458,6 +473,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
