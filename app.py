@@ -211,13 +211,13 @@ else:
 # ... (fine del codice della ragnatela) ...
 
 
-# --- INTEGRAZIONE GCI DATABASE ---
+# --- INTEGRAZIONE GCI DATABASE FINALE ---
     if search_query:
         st.divider()
-        st.header(f"📑 Evidence Report: {search_query}")
+        st.header(f"📑 Evidence Report Clinico: {search_query}")
         
         try:
-            # Cerchiamo il target nelle colonne chiave del tuo file GCI
+            # Query ottimizzata
             clinical_res = supabase.table("clinical_trials").select("*").or_(
                 f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
             ).execute()
@@ -225,29 +225,34 @@ else:
             trials = pd.DataFrame(clinical_res.data)
             
             if not trials.empty:
-                # Metriche basate sulle tue colonne reali
+                # Layout a 3 colonne per le metriche chiave
                 m1, m2, m3 = st.columns(3)
                 with m1:
-                    st.metric("Trial Totali", len(trials))
+                    st.metric("Trial Totali (GCI)", len(trials))
                 with m2:
-                    # Usiamo la tua colonna 'Practice_Changing'
-                    pc_count = len(trials[trials['Practice_Changing'] == 'Yes'])
+                    # Conta quanti sono "Practice Changing"
+                    pc_count = len(trials[trials['Practice_Changing'].str.contains('Yes', na=False)]) if 'Practice_Changing' in trials.columns else 0
                     st.metric("Practice Changing", pc_count)
                 with m3:
-                    # Usiamo la colonna 'Phase'
+                    # Mostra la fase più frequente
                     top_phase = trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A"
                     st.metric("Fase Prevalente", top_phase)
 
-                # Tabella Dettagliata con le tue colonne
-                st.subheader("Dettaglio Studi Clinici (GCI Database)")
-                # Selezioniamo solo le colonne che esistono nel tuo CSV
-                cols_to_show = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
-                # Filtriamo solo quelle effettivamente presenti per evitare errori
-                existing_cols = [c for c in cols_to_show if c in trials.columns]
+                # Tabella Dettagliata
+                st.subheader("Dettaglio Studi Clinici")
                 
-                st.dataframe(trials[existing_cols], use_container_width=True)
+                # Selezioniamo solo le colonne più importanti per non affollare la vista
+                cols_view = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
+                # Filtro di sicurezza per mostrare solo le colonne effettivamente presenti
+                display_df = trials[[c for c in cols_view if c in trials.columns]]
+                
+                st.dataframe(display_df, use_container_width=True)
+                
+                # Espansore per vedere tutti i dati grezzi se necessario
+                with st.expander("Visualizza tutti i dati GCI grezzi"):
+                    st.write(trials)
             else:
-                st.info(f"Nessun trial clinico trovato per '{search_query}'. Prova con 'HER2' o 'PD-L1'.")
+                st.info(f"Nessun trial clinico trovato per '{search_query}' nel database GCI.")
                 
         except Exception as e:
-            st.error(f"Errore di connessione: Verifica che la tabella si chiami 'clinical_trials'. Dettaglio: {e}")
+            st.error(f"Errore durante l'integrazione clinica: {e}")
