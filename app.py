@@ -9,6 +9,41 @@ from datetime import datetime
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="MAESTRO Omikron Suite v2.6.2 build 2630012026", layout="wide")
 
+# --- GLOBAL TYPOGRAPHY TUNING (shrink big titles only) ---
+st.markdown("""
+<style>
+/* Streamlit main title (st.title) */
+div[data-testid="stAppViewContainer"] h1 {
+    font-size: 1.75rem !important;   /* was ~2.25rem */
+    line-height: 1.15 !important;
+    margin-bottom: 0.35rem !important;
+}
+
+/* Section headers from markdown ## and similar */
+div[data-testid="stAppViewContainer"] h2 {
+    font-size: 1.35rem !important;   /* was ~1.75rem */
+    line-height: 1.2 !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.35rem !important;
+}
+
+/* Subheaders / markdown ### */
+div[data-testid="stAppViewContainer"] h3 {
+    font-size: 1.10rem !important;   /* was ~1.4rem */
+    line-height: 1.25 !important;
+    margin-top: 0.55rem !important;
+    margin-bottom: 0.3rem !important;
+}
+
+/* Optional: slightly smaller "st.subheader" spacing without changing body text */
+div[data-testid="stAppViewContainer"] [data-testid="stHeader"] {
+    margin-bottom: 0.25rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
 # --- 2. CONNECTION (Secrets Recommended) ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
@@ -337,4 +372,5 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
