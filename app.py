@@ -197,64 +197,9 @@ else:
 
                 show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
                 st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
-	    
 
-# --- SEZIONE ESPORTAZIONE AVANZATA ---
-            st.markdown("### 📥 Intelligence Export")
-            
-            # 1. Preparazione dei dati per l'esportazione
-            # Creiamo un set di dati che riassume tutto ciò che MAESTRO ha trovato
-            hub_summary = {
-                "Target": search_query,
-                "VTG_Score": row['initial_score'],
-                "TMI_Index": row['toxicity_index'],
-                "CES_Efficiency": row['ces_score'],
-                "Description": row.get('description_l0', ''),
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Trasformiamo tutto in DataFrame per l'esportazione
-            df_hub = pd.DataFrame([hub_summary])
-            
-            # Funzione per convertire i DataFrame in un unico CSV leggibile
-            def convert_to_full_csv(hub_df, neighbors, odi, gci, pmi):
-                output = io.StringIO()
-                output.write("--- HUB CORE METRICS ---\n")
-                hub_df.to_csv(output, index=False)
-                output.write("\n--- NETWORK NEIGHBORS ---\n")
-                neighbors.to_csv(output, index=False)
-                output.write("\n--- THERAPEUTICS (ODI) ---\n")
-                odi.to_csv(output, index=False)
-                output.write("\n--- CLINICAL TRIALS (GCI) ---\n")
-                gci.to_csv(output, index=False)
-                output.write("\n--- PATHWAYS (PMI) ---\n")
-                pmi.to_csv(output, index=False)
-                return output.getvalue()
-
-            # Generazione del file
-            full_csv_data = convert_to_full_csv(df_hub, neighbors_df, odi_df, gci_df, pmi_df)
-            
-            # Pulsante di Download
-            st.download_button(
-                label="📊 Download Full Portfolio (CSV)",
-                data=full_csv_data,
-                file_name=f"MAESTRO_Full_Report_{search_query}.csv",
-                mime="text/csv",
-                help="Esporta un dossier completo con parametri AXON, farmaci ODI, trial GCI e vicini network."
-            )
-
-
-
-
-
-
-
-
-
-
-
-
-
+            full_report = f"MAESTRO v20.6 REPORT\nTarget: {search_query}\nDate: {datetime.now()}"
+            st.download_button("📥 Export Full Intelligence (.txt)", full_report, file_name=f"MAESTRO_{search_query}.txt")
 
 # --- 6. NETWORK MAP & RANKING ---
 st.divider()
@@ -427,7 +372,5 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
 
 
