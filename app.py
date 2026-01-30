@@ -36,6 +36,7 @@ max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
 st.sidebar.divider()
 st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
 search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS").strip().upper()
+st.sidebar.warning("⚠️ **Research Use Only**\n\nNot for use in diagnostic or therapeutic procedures.")
 
 # --- 4. LOGICA DI FILTRO AVANZATA (HUB + VICINI) ---
 if search_query and not df.empty:
@@ -130,3 +131,11 @@ if search_query:
     if not gci_df.empty:
         st.success(f"Trovate {len(gci_df)} evidenze per '{search_query}'")
         st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type', 'Key_Results_PFS']], use_container_width=True)
+
+st.divider()
+st.caption("""
+    **Disclaimer:** This platform is for research purposes only (RUO). 
+    Data provided by AXON Knowledge and GCI Database are intended for scientific analysis 
+    and do not constitute medical advice or clinical guidelines.
+""")
+
