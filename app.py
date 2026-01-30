@@ -19,7 +19,8 @@ def load_axon():
     try:
         res = supabase.table("axon_knowledge").select("*").execute()
         d = pd.DataFrame(res.data or [])
-        if d.empty: return d
+        if d.empty:
+            return d
         d["target_id"] = d["target_id"].astype(str).str.strip().str.upper()
         d["initial_score"] = pd.to_numeric(d.get("initial_score"), errors="coerce").fillna(0.0)
         d["toxicity_index"] = pd.to_numeric(d.get("toxicity_index"), errors="coerce").fillna(0.0)
@@ -43,7 +44,41 @@ def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, 
     cand = cand.sort_values(["ces_score", "initial_score"], ascending=False).head(int(k))
     return cand
 
+@st.cache_data(ttl=600)
+def load_db_totals():
+    """
+    Recupera il totale item per ciascun database collegato usando count=exact (Supabase/PostgREST).
+    Se la count non è disponibile (RLS/permessi), ritorna None e la UI mostrerà '—'.
+    """
+    totals = {
+        "AXON": None,
+        "ODI": None,
+        "PMI": None,
+        "GCI": None,
+    }
+
+    def safe_count(table_name: str):
+        try:
+            # PostgREST: count exact con select minimale (head True riduce payload)
+            res = supabase.table(table_name).select("*", count="exact").execute()
+            # supabase-py mette la count in res.count (di solito)
+            c = getattr(res, "count", None)
+            if c is None:
+                # fallback: alcuni wrapper mettono count dentro res.data? in genere no
+                return None
+            return int(c)
+        except Exception:
+            return None
+
+    totals["AXON"] = safe_count("axon_knowledge")
+    totals["ODI"] = safe_count("odi_database")
+    totals["PMI"] = safe_count("pmi_database")
+    totals["GCI"] = safe_count("GCI_clinical_trials")
+
+    return totals
+
 df = load_axon()
+db_totals = load_db_totals()
 
 # --- 3. SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
@@ -66,7 +101,7 @@ top_k = st.sidebar.slider(
     help="Definisce il raggio di interazione dell'hub mostrando i partner molecolari più significativi."
 )
 
-# --- NUOVO: DISCLAIMER SIDEBAR ---
+# --- DISCLAIMER SIDEBAR ---
 st.sidebar.markdown("""
 <div style="background-color: #1a1a1a; padding: 12px; border-radius: 8px; border-left: 4px solid #ff4b4b; margin-top: 15px;">
     <p style="font-size: 0.75rem; color: #ff4b4b; font-weight: bold; margin-bottom: 5px;">⚠️ RUO STATUS</p>
@@ -86,7 +121,8 @@ if search_query and not df.empty and "error" not in df.columns:
         pmi_df = pd.DataFrame(res_pmi.data or [])
         res_odi = supabase.table("odi_database").select("*").ilike("Targets", f"%{search_query}%").execute()
         odi_df = pd.DataFrame(res_odi.data or [])
-    except Exception: pass
+    except Exception:
+        pass
 
 # --- 5. UI: OPERA DIRECTOR ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
@@ -103,8 +139,7 @@ else:
         else:
             row = target_data.iloc[0]
             st.markdown(f"## 🎼 Opera Director: {search_query}")
-            
-            # Parametri con chiarimenti tecnici (tooltips HTML)
+
             st.markdown(f"""
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
                 <div title="OMI: Rilevamento molecolare nel database AXON" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
@@ -140,7 +175,7 @@ else:
 
 # --- 6. RAGNATELA & RANKING ---
 st.divider()
-if not df.empty:
+if not df.empty and "error" not in df.columns:
     if search_query:
         neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
         hub_df = df[df["target_id"] == search_query]
@@ -150,38 +185,71 @@ if not df.empty:
 
     if not filtered_df.empty:
         st.subheader("🕸️ Network Interaction Map")
-        
+
         G = nx.Graph()
         for _, r in filtered_df.iterrows():
             tid = r["target_id"]
             is_hub = bool(search_query) and (tid == search_query)
-            G.add_node(tid, size=float(r["initial_score"]) * (70 if is_hub else 35), color=float(r["toxicity_index"]), is_hub=is_hub)
+            G.add_node(
+                tid,
+                size=float(r["initial_score"]) * (70 if is_hub else 35),
+                color=float(r["toxicity_index"]),
+                is_hub=is_hub
+            )
         nodes = list(G.nodes())
         if search_query and search_query in nodes:
             for n in nodes:
-                if n != search_query: G.add_edge(search_query, n)
-        
+                if n != search_query:
+                    G.add_edge(search_query, n)
+
         pos = nx.spring_layout(G, k=1.1, seed=42)
         edge_x, edge_y = [], []
         for a, b in G.edges():
-            x0, y0 = pos[a]; x1, y1 = pos[b]
-            edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
+            x0, y0 = pos[a]
+            x1, y1 = pos[b]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
 
         fig_net = go.Figure()
-        fig_net.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines", line=dict(color="#444", width=0.9), hoverinfo="none"))
         fig_net.add_trace(go.Scatter(
-            x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes], mode="markers+text", text=nodes,
-            textposition="top center", textfont=dict(size=10, color="white"),
-            marker=dict(size=[G.nodes[n]["size"] for n in nodes], color=[G.nodes[n]["color"] for n in nodes],
-                        colorscale="RdYlGn_r", showscale=True, line=dict(width=1, color="white"))
+            x=edge_x, y=edge_y,
+            mode="lines",
+            line=dict(color="#444", width=0.9),
+            hoverinfo="none"
         ))
-        fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=500)
+        fig_net.add_trace(go.Scatter(
+            x=[pos[n][0] for n in nodes],
+            y=[pos[n][1] for n in nodes],
+            mode="markers+text",
+            text=nodes,
+            textposition="top center",
+            textfont=dict(size=10, color="white"),
+            marker=dict(
+                size=[G.nodes[n]["size"] for n in nodes],
+                color=[G.nodes[n]["color"] for n in nodes],
+                colorscale="RdYlGn_r",
+                showscale=True,
+                line=dict(width=1, color="white")
+            )
+        ))
+        fig_net.update_layout(
+            showlegend=False,
+            margin=dict(b=0, l=0, r=0, t=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=500
+        )
         st.plotly_chart(fig_net, use_container_width=True)
 
         st.subheader("📊 Hub Signal Ranking")
-        fig_bar = px.bar(filtered_df.sort_values("initial_score", ascending=True).tail(15), 
-                         x="initial_score", y="target_id", orientation="h",
-                         color="toxicity_index", color_continuous_scale="RdYlGn_r", template="plotly_dark")
+        fig_bar = px.bar(
+            filtered_df.sort_values("initial_score", ascending=True).tail(15),
+            x="initial_score", y="target_id",
+            orientation="h",
+            color="toxicity_index",
+            color_continuous_scale="RdYlGn_r",
+            template="plotly_dark"
+        )
         fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -190,30 +258,99 @@ if search_query:
     st.divider()
     st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
     c_odi, c_gci, c_pmi = st.columns(3)
+
     with c_odi:
         st.markdown(f"### 💊 Therapeutics (ODI: {len(odi_df)})")
         if not odi_df.empty:
             for _, r in odi_df.iterrows():
                 with st.expander(f"**{r.get('Generic_Name', 'N/D')}**"):
                     st.write(f"**Meccanismo:** {r.get('Description_L0', 'N/A')}")
-        else: st.info("Nessun item ODI.")
+        else:
+            st.info("Nessun item ODI.")
+
     with c_gci:
         st.markdown(f"### 🧪 Clinical Trials (GCI: {len(gci_df)})")
         if not gci_df.empty:
             for _, r in gci_df.iterrows():
                 with st.expander(f"**Phase {r.get('Phase', 'N/D')} Trial**"):
                     st.write(f"**Titolo:** {r.get('Canonical_Title', 'N/A')}")
-        else: st.info("Nessun trial GCI.")
+        else:
+            st.info("Nessun trial GCI.")
+
     with c_pmi:
         st.markdown(f"### 🧬 Pathways (PMI: {len(pmi_df)})")
         if not pmi_df.empty:
             for _, r in pmi_df.iterrows():
                 with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**"):
                     st.write(f"**Dettaglio:** {r.get('Description_L0', 'N/A')}")
-        else: st.info("Nessun pathway PMI.")
+        else:
+            st.info("Nessun pathway PMI.")
 
 # --- 8. FOOTER & DISCLAIMER ---
 st.divider()
+
+# --- NUOVO: DATABASE CONNECTED SUMMARY (icone + totali) ---
+st.subheader("🔌 Database Collegati")
+
+def fmt_total(x):
+    return f"{x:,}".replace(",", ".") if isinstance(x, int) else "—"
+
+cards = [
+    {
+        "name": "AXON",
+        "icon": "https://img.icons8.com/fluency/96/brain.png",
+        "desc": "Knowledge hub targets",
+        "total": fmt_total(db_totals.get("AXON")),
+        "accent": "#007bff"
+    },
+    {
+        "name": "ODI",
+        "icon": "https://img.icons8.com/fluency/96/pill.png",
+        "desc": "Therapeutics & molecules",
+        "total": fmt_total(db_totals.get("ODI")),
+        "accent": "#ffc107"
+    },
+    {
+        "name": "PMI",
+        "icon": "https://img.icons8.com/fluency/96/dna-helix.png",
+        "desc": "Pathways & mechanisms",
+        "total": fmt_total(db_totals.get("PMI")),
+        "accent": "#6f42c1"
+    },
+    {
+        "name": "GCI",
+        "icon": "https://img.icons8.com/fluency/96/test-tube.png",
+        "desc": "Clinical trials repository",
+        "total": fmt_total(db_totals.get("GCI")),
+        "accent": "#28a745"
+    },
+]
+
+st.markdown(
+    """
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 6px;">
+    """
+    + "".join([
+        f"""
+        <div style="background:#0e1117; border:1px solid #2a2f3a; border-radius: 12px; padding: 14px; display:flex; gap: 12px; align-items:center;">
+            <img src="{c['icon']}" style="width:46px; height:46px; border-radius: 10px;" />
+            <div style="line-height:1.1;">
+                <div style="font-size:0.85rem; color:#aaa;">{c['name']}</div>
+                <div style="font-size:1.35rem; font-weight:800; color:white;">{c['total']}</div>
+                <div style="font-size:0.78rem; color:#7f8796;">{c['desc']}</div>
+            </div>
+            <div style="margin-left:auto; width:10px; height:46px; border-radius: 10px; background:{c['accent']}; opacity:0.9;"></div>
+        </div>
+        """
+        for c in cards
+    ]) +
+    "</div>",
+    unsafe_allow_html=True
+)
+
+st.caption("Nota: i totali sono calcolati via query `count=exact` su Supabase. Se vedi '—', controlla permessi/RLS o policy di lettura della tabella.")
+
+# --- sezione repository (la tua) ---
 st.subheader("📚 MAESTRO Intelligence Repository")
 exp1, exp2, exp3 = st.columns(3)
 with exp1:
@@ -226,11 +363,12 @@ with exp3:
     with st.expander("🧪 GCI & TMI Index"):
         st.write("GCI: Trials Clinici. TMI: Toxicity Index.")
 
+# --- DISCLAIMER ---
 st.markdown(f"""
 <div style="background-color: #0e1117; padding: 25px; border-radius: 12px; border: 1px solid #333; text-align: center; max-width: 900px; margin: 0 auto; margin-top: 20px;">
     <h4 style="color: #ff4b4b; margin-top: 0;">⚠️ DISCLAIMER SCIENTIFICO E LEGALE</h4>
     <p style="font-size: 0.8rem; color: #888; text-align: justify; line-height: 1.5;">
-        <b>MAESTRO Omikron Suite</b> è destinato esclusivamente ad uso di ricerca (RUO). 
+        <b>MAESTRO Omikron Suite</b> è destinato esclusivamente ad uso di ricerca (RUO).
         Le analisi generate non sostituiscono pareri medici. © 2026 Omikron Orchestra Project.
     </p>
 </div>
