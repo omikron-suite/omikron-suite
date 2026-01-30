@@ -5,6 +5,13 @@ import networkx as nx
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import io  # <--- AGGIUNGI QUESTA RIGA
+
+
+
+
+
+
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="MAESTRO Omikron Suite v2.6.2 build 2630012026", layout="wide")
@@ -440,6 +447,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
