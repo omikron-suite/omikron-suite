@@ -284,7 +284,7 @@ else:
                 data=full_report_data,
                 file_name=f"MAESTRO_Full_Dossier_{search_query}_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
-                help="Export a complete dossier including AXON, Neighbors, ODI, GCI and PMI"
+                help="Export a complete dossier including AXON, Neighbors, ODI, GCI and PMI."
             )
 
 # --- 6. NETWORK MAP & RANKING ---
@@ -458,6 +458,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
