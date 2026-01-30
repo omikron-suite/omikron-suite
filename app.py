@@ -103,7 +103,7 @@ if not pmi_df.empty:
             st.write(f"**Descrizione:** {p['Description_L0']}")
             st.caption(f"Priority: {p['Evidence_Priority']}")
 
-# --- 7. GRAFICI E RAGNATELA CON NODI AGGIUNTIVI ---
+# --- 7. GRAFICI E RAGNATELA (FIX LAYOUT) ---
 st.divider()
 c1, c2 = st.columns([2, 1])
 with c1:
@@ -115,54 +115,74 @@ with c2:
         st.subheader("🥇 Hub Ranking")
         st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
 
-# RAGNATELA AGGIORNATA
-st.subheader("🕸️ Network Interaction Map")
+# RAGNATELA POTENZIATA
+st.subheader("🕸️ Network Interaction Map (Dynamic Spider Layout)")
+
 
 if not filtered_df.empty:
     G = nx.Graph()
     
-    # Nodi Target (AXON)
+    # 1. Nodi Target (AXON)
     for _, r in filtered_df.iterrows():
         tid = r['target_id']
         is_f = tid.upper() == search_query
-        G.add_node(tid, size=float(r['initial_score']) * (40 if is_f else 25), color=float(r['toxicity_index']), type='target')
+        G.add_node(tid, 
+                   size=float(r['initial_score']) * (50 if is_f else 30), 
+                   color=float(r['toxicity_index']), 
+                   type='target',
+                   label=tid)
 
-    # Nodi Farmaco (ODI) - Aggiunti alla ragnatela
+    # 2. Nodi Farmaco (ODI)
     if not odi_df.empty and search_query:
-        for _, drug in odi_df.head(3).iterrows():
+        for _, drug in odi_df.head(4).iterrows():
             d_node = drug['Generic_Name']
-            G.add_node(d_node, size=20, color=0.2, type='drug')
+            G.add_node(d_node, size=25, color=0.3, type='drug', label=f"💊 {d_node}")
             G.add_edge(search_query, d_node)
 
-    # Nodi Pathway (PMI) - Aggiunti alla ragnatela
+    # 3. Nodi Pathway (PMI)
     if not pmi_df.empty and search_query:
-        for _, path in pmi_df.head(3).iterrows():
+        for _, path in pmi_df.head(4).iterrows():
             p_node = path['Canonical_Name']
-            G.add_node(p_node, size=20, color=0.8, type='pathway')
+            G.add_node(p_node, size=25, color=0.7, type='pathway', label=f"🧬 {p_node}")
             G.add_edge(search_query, p_node)
 
-    # Collegamenti tra Target
-    nodes = list(G.nodes())
-    if search_query in nodes:
-        for n in [nd for nd, data in G.nodes(data=True) if data.get('type') == 'target']:
-            if n != search_query: G.add_edge(search_query, n)
+    # 4. Collegamenti tra Hub Target
+    t_nodes = [n for n, d in G.nodes(data=True) if d.get('type') == 'target']
+    if search_query in t_nodes:
+        for tn in t_nodes:
+            if tn != search_query: G.add_edge(search_query, tn)
+
+    # LAYOUT DINAMICO: k regola la distanza tra nodi, iterations la stabilità
+    pos = nx.spring_layout(G, k=1.2, iterations=50, seed=42)
     
-    pos = nx.spring_layout(G, k=0.8, seed=42)
     edge_x, edge_y = [], []
     for e in G.edges():
         x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
     
-    fig_net = go.Figure(data=[
-        go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='#888'), mode='lines', hoverinfo='none'),
-        go.Scatter(x=[pos[n][0] for n in G.nodes()], y=[pos[n][1] for n in G.nodes()], 
-                   mode='markers+text', text=list(G.nodes()), textposition="top center",
-                   marker=dict(size=[G.nodes[n]['size'] for n in G.nodes()], 
-                               color=[G.nodes[n]['color'] for n in G.nodes()],
-                               colorscale='RdYlGn_r', line=dict(color='white', width=1.5), showscale=True))
-    ])
-    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.2, color='#666'), mode='lines', hoverinfo='none')
+    
+    node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
+    for n in G.nodes():
+        x, y = pos[n]
+        node_x.append(x)
+        node_y.append(y)
+        node_text.append(G.nodes[n].get('label', n))
+        node_color.append(G.nodes[n].get('color', 0.5))
+        node_size.append(G.nodes[n].get('size', 20))
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y, mode='markers+text', text=node_text, textposition="top center",
+        marker=dict(showscale=True, colorscale='RdYlGn_r', color=node_color, size=node_size, 
+                    line=dict(color='white', width=1.5))
+    )
+
+    fig_net = go.Figure(data=[edge_trace, node_trace],
+                        layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'))
+    
     st.plotly_chart(fig_net, use_container_width=True)
 
 # --- 8. PORTALI DATI ---
@@ -178,4 +198,4 @@ with p_gci:
         st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
 
 st.divider()
-st.caption("MAESTRO Suite | Integration of AXON, GCI, ODI, PMI | RUO")
+st.caption("MAESTRO Suite | Integrated Build | RUO")
