@@ -114,24 +114,46 @@ if not filtered_df.empty:
 
 
 
-# --- VERSIONE TEST VELOCE ---
+# --- 10. INTEGRAZIONE CLINICAL TRIALS (GCI) ---
+    st.write("---") # Linea di separazione visiva sempre presente
+    
     if search_query:
-        st.divider()
-        st.subheader(f"Ricerca Clinica per: {search_query}")
+        st.info(f"🔍 Avvio ricerca clinica nel database GCI per: {search_query}...")
         
-        # 1. Vediamo se la tabella risponde
         try:
-            res = supabase.table("clinical_trials").select("count", count="exact").limit(1).execute()
-            st.write("✅ Connessione alla tabella clinical_trials riuscita.")
-        except Exception as e:
-            st.error(f"❌ Errore di connessione: La tabella 'clinical_trials' non esiste su Supabase. Errore: {e}")
+            # Query con operatore 'ilike' per trovare corrispondenze parziali (es. HER2 trova HER2-Low)
+            clinical_res = supabase.table("clinical_trials").select("*").or_(
+                f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
+            ).execute()
+            
+            trials = pd.DataFrame(clinical_res.data)
 
-        # 2. Vediamo se trova il target specifico
-        clinical_res = supabase.table("clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
-        trials = pd.DataFrame(clinical_res.data)
-        
-        if not trials.empty:
-            st.success(f"Trovati {len(trials)} studi per {search_query}")
-            st.dataframe(trials)
-        else:
-            st.warning(f"Nessun dato trovato per '{search_query}'. Controlla che nella colonna Primary_Biomarker ci sia questo nome.")
+            if not trials.empty:
+                st.header(f"📑 Evidence Report Clinico: {search_query}")
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Trial Totali (GCI)", len(trials))
+                
+                # Calcolo Practice Changing
+                if 'Practice_Changing' in trials.columns:
+                    pc_count = len(trials[trials['Practice_Changing'].astype(str).str.contains('Yes', case=False, na=False)])
+                    m2.metric("Practice Changing", pc_count)
+                else:
+                    m2.metric("Practice Changing", "N/A")
+                
+                m3.metric("Fase Prevalente", trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A")
+
+                st.subheader("Dettaglio Studi Clinici (GCI Database)")
+                # Lista colonne desiderate
+                cols_view = ['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']
+                # Filtro solo quelle che esistono davvero nella tabella
+                actual_cols = [c for c in cols_view if c in trials.columns]
+                
+                st.dataframe(trials[actual_cols], use_container_width=True)
+            else:
+                st.warning(f"Nessun trial trovato nel database per '{search_query}'. Verifica che nella tabella 'clinical_trials' i nomi siano corretti.")
+                
+        except Exception as e:
+            st.error(f"⚠️ Errore Tecnico: {e}")
+    else:
+        st.write("💡 Digita un target (es. HER2) nella barra di ricerca per vedere le evidenze cliniche.")
