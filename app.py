@@ -104,7 +104,6 @@ filtered_df = df[df["target_id"].str.contains(search_query, na=False)] if search
 
 if not filtered_df.empty:
     st.subheader("🕸️ Network Interaction Map")
-    
     G = nx.Graph()
     for _, r in filtered_df.iterrows():
         tid = r["target_id"]; is_f = (tid == search_query)
@@ -113,6 +112,8 @@ if not filtered_df.empty:
     if search_query in nodes:
         for n in nodes:
             if n != search_query: G.add_edge(search_query, n)
+    elif len(nodes) > 1:
+        for i in range(len(nodes) - 1): G.add_edge(nodes[i], nodes[i + 1])
     
     pos = nx.spring_layout(G, k=1.2, seed=42)
     edge_x, edge_y = [], []
@@ -132,12 +133,12 @@ if not filtered_df.empty:
     st.plotly_chart(fig_net, use_container_width=True)
 
     st.subheader("📊 Hub Signal Ranking")
-    
     fig_bar = px.bar(filtered_df.sort_values("initial_score", ascending=True).tail(15), 
                      x="initial_score", y="target_id", orientation='h',
                      color="toxicity_index", color_continuous_scale="RdYlGn_r", template="plotly_dark")
-    fig_bar.update_layout(height=350, margin=dict(l=0, r=0, t=20, b=0))
+    fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig_bar, use_container_width=True)
+
 
 # --- 7. HUB INTELLIGENCE DESK (LISTATI COMPLETI SOTTO IL RANKING) ---
 if search_query:
@@ -198,3 +199,4 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
