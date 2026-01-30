@@ -36,11 +36,28 @@ max_t = st.sidebar.slider("Limite Tossicità (TMI)", 0.0, 1.0, 0.8)
 st.sidebar.divider()
 st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
 search_query = st.sidebar.text_input("Cerca Target o Hub", placeholder="es. KRAS").strip().upper()
-st.sidebar.warning("⚠️ **Research Use Only**\n\nNot for use in diagnostic or therapeutic procedures.")
+st.sidebar.warning("⚠️ **Research Use Only**")
 
-# --- 4. LOGICA DI FILTRO AVANZATA ---
+# --- 4. LOGICA DI FILTRO ---
+gci_df = pd.DataFrame()
+pmi_df = pd.DataFrame()
+odi_df = pd.DataFrame()
+
 if search_query and not df.empty:
-    main_target_df = df[df['target_id'].str.upper() == search_query]
+    # 1. Caricamento Dati Satelliti (GCI, PMI, ODI)
+    try:
+        res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
+        gci_df = pd.DataFrame(res_gci.data)
+        
+        res_pmi = supabase.table("pmi_database").select("*").ilike("Key_Targets", f"%{search_query}%").execute()
+        pmi_df = pd.DataFrame(res_pmi.data)
+        
+        res_odi = supabase.table("odi_database").select("*").ilike("Targets", f"%{search_query}%").execute()
+        odi_df = pd.DataFrame(res_odi.data)
+    except:
+        pass
+
+    # 2. Filtro per Ragnatela
     all_targets = df['target_id'].tolist()
     if search_query in all_targets:
         idx = all_targets.index(search_query)
@@ -52,124 +69,101 @@ if search_query and not df.empty:
 else:
     filtered_df = df[(df['initial_score'] >= min_sig) & (df['toxicity_index'] <= max_t)] if not df.empty else df
 
-# --- 5. DASHBOARD HEADER ---
+# --- 5. OPERA DIRECTOR (GRIGLIA CHIRURGICA) ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
-# --- CARTIGLIO + REPORT GENERATOR ---
 if search_query and not df.empty:
     target_data = df[df['target_id'].str.upper() == search_query]
-    
-    # Eseguiamo subito la query GCI per il report
-    res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
-    gci_df = pd.DataFrame(res_gci.data)
-
     if not target_data.empty:
         row = target_data.iloc[0]
-        st.markdown(f"### 🎯 Target Intelligence Card: {search_query}")
+        st.markdown(f"## 🎼 Opera Director: {search_query}")
         
-        # 4 Metriche chiave
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric(label="VTG Signal Score", value=f"{row['initial_score']:.2f}")
-        with m2:
-            tox_label = "SICURO" if row['toxicity_index'] < 0.4 else "CRITICO" if row['toxicity_index'] > 0.7 else "MODERATO"
-            st.metric(label="TMI Toxicity Index", value=tox_label, delta=f"{row['toxicity_index']:.2f}", delta_color="inverse")
-        with m3:
-            st.metric(label="CES Efficiency", value=f"{row['ces_score']:.2f}")
-        with m4:
-            status = "In Trial" if not gci_df.empty else "Pre-clinico"
-            st.metric(label="Clinical Status", value=status)
+        # RIGA 1: MECCANICA & SICUREZZA (5 Campi precisi)
+        st.markdown("##### ⚙️ Meccanica & Sicurezza")
+        r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
+        r1c1.metric("OMI (Biomarker)", "DETECTED")
+        r1c2.metric("SMI (Pathway)", f"{len(pmi_df)} Linked" if not pmi_df.empty else "STABLE")
+        r1c3.metric("ODI (Drug)", "TARGETABLE" if not odi_df.empty else "NO DRUG")
+        r1c4.metric("TMI (Tossicità)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
+        r1c5.metric("CES (Efficiency)", f"{row['ces_score']:.2f}")
 
-        # TASTO EXPORT REPORT
-        report_text = f"""# MAESTRO INTELLIGENCE REPORT: {search_query}
-Generated: {pd.Timestamp.now().strftime('%Y-%m-%d')} | RESEARCH USE ONLY
+        # RIGA 2: CONTESTO & AMBIENTE (5 Campi precisi)
+        st.markdown("##### 🌍 Ambiente & Host")
+        r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
+        r2c1.metric("BCI (Bio-cost.)", "OPTIMAL")
+        r2c2.metric("GNI (Genetica)", "STABLE")
+        r2c3.metric("EVI (Ambiente)", "LOW RISK")
+        r2c4.metric("MBI (Microbiota)", "RESILIENT")
+        phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
+        r2c5.metric("GCI (Clinica)", phase)
 
-## 1. MOLECULAR PROFILE (AXON)
-- Signal VTG: {row['initial_score']:.2f}
-- Toxicity TMI: {row['toxicity_index']:.2f}
-- Combined Score (CES): {row['ces_score']:.2f}
+        # REPORT EXPORT
+        report_text = f"REPORT: {search_query}\nSignal VTG: {row['initial_score']:.2f}\nPhase: {phase}"
+        st.download_button("📥 Scarica Report (.txt)", report_text, file_name=f"MAESTRO_{search_query}.txt")
+        st.divider()
 
-## 2. CLINICAL PROFILE (GCI)
-"""
-        if not gci_df.empty:
-            report_text += f"- Trials Found: {len(gci_df)}\n- Top Phase: {gci_df['Phase'].iloc[0]}\n\nTop Evidence:\n"
-            for _, t in gci_df.head(3).iterrows():
-                report_text += f"  * {t['Canonical_Title']} ({t['Year']}) | PFS: {t.get('Key_Results_PFS', 'N/A')}\n"
-        else:
-            report_text += "- No clinical trials found for this biomarker.\n"
+# --- 6. PATHWAY DETAIL (SMI) ---
+if not pmi_df.empty:
+    st.subheader("🧬 Signaling & Pathway Analysis (SMI)")
+    
+    for _, p in pmi_df.iterrows():
+        with st.expander(f"Pathway: {p['Canonical_Name']} ({p['Category']})"):
+            st.write(f"**Descrizione:** {p['Description_L0']}")
+            st.write(f"**Readouts:** {p['Key_Readouts']}")
+            st.caption(f"Priority: {p['Evidence_Priority']} | Confidence: {p['Confidence_Default']}")
 
-        st.download_button(
-            label="📥 Scarica Intelligence Report (.txt)",
-            data=report_text,
-            file_name=f"MAESTRO_Report_{search_query}.txt",
-            mime="text/plain"
-        )
-        st.markdown("---")
-
-st.markdown(f"**Focus Mode:** {search_query if search_query else 'Global View'}")
-
-# --- 6. GRAFICI AXON ---
-col1, col2 = st.columns([2, 1])
-with col1:
+# --- 7. GRAFICI E RAGNATELA ---
+st.divider()
+c1, c2 = st.columns([2, 1])
+with c1:
     if not filtered_df.empty:
         st.plotly_chart(px.bar(filtered_df, x="target_id", y="initial_score", color="toxicity_index", 
                                color_continuous_scale="RdYlGn_r", template="plotly_dark"), use_container_width=True)
-with col2:
+with c2:
     if not filtered_df.empty:
         st.subheader("🥇 Hub Ranking")
         st.dataframe(filtered_df.sort_values('ces_score', ascending=False)[['target_id', 'ces_score']], use_container_width=True)
 
-# --- 7. RAGNATELA DINAMICA ---
-st.divider()
-st.subheader("🕸️ Network Interaction Map (Relational Focus)")
-
+# RAGNATELA
+st.subheader("🕸️ Network Interaction Map")
 if not filtered_df.empty:
     G = nx.Graph()
-    for _, row in filtered_df.iterrows():
-        is_focus = row['target_id'].upper() == search_query
-        G.add_node(row['target_id'], 
-                   size=float(row['initial_score']) * (40 if is_focus else 25), 
-                   color=float(row['toxicity_index']))
-    
+    for _, r in filtered_df.iterrows():
+        is_f = r['target_id'].upper() == search_query
+        G.add_node(r['target_id'], size=float(r['initial_score']) * (40 if is_f else 25), color=float(r['toxicity_index']))
     nodes = list(G.nodes())
     if search_query in nodes:
-        for node in nodes:
-            if node != search_query: G.add_edge(search_query, node)
-    elif len(nodes) > 1:
-        for i in range(len(nodes)):
-            for j in range(i + 1, min(i + 3, len(nodes))): G.add_edge(nodes[i], nodes[j])
-
+        for n in nodes:
+            if n != search_query: G.add_edge(search_query, n)
+    
     pos = nx.spring_layout(G, k=0.8, seed=42)
     edge_x, edge_y = [], []
-    for edge in G.edges():
-        x0, y0 = pos[edge[0]]; x1, y1 = pos[edge[1]]
+    for e in G.edges():
+        x0, y0 = pos[e[0]]; x1, y1 = pos[e[1]]
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
     
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#999'), mode='lines', hoverinfo='none')
-    node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
-    for node in G.nodes():
-        x, y = pos[node]; node_x.append(x); node_y.append(y); node_text.append(node)
-        node_color.append(G.nodes[node]['color']); node_size.append(G.nodes[node]['size'])
+    fig_net = go.Figure(data=[
+        go.Scatter(x=edge_x, y=edge_y, line=dict(width=1.5, color='#999'), mode='lines', hoverinfo='none'),
+        go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes], mode='markers+text', 
+                   text=nodes, textposition="top center",
+                   marker=dict(size=[G.nodes[n]['size'] for n in nodes], color=[G.nodes[n]['color'] for n in nodes],
+                   colorscale='RdYlGn_r', line=dict(color='white', width=2), showscale=True))
+    ])
+    fig_net.update_layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                          xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+    st.plotly_chart(fig_net, use_container_width=True)
 
-    node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=node_text, textposition="top center",
-                            marker=dict(showscale=True, colorscale='RdYlGn_r', color=node_color, size=node_size, 
-                            line=dict(color='white', width=2)))
-
-    st.plotly_chart(go.Figure(data=[edge_trace, node_trace], layout=go.Layout(showlegend=False, margin=dict(b=0,l=0,r=0,t=0),
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')), use_container_width=True)
-
-# --- 8. GCI PORTAL ---
+# --- 8. PORTALI DATI (ODI & GCI) ---
 st.divider()
-st.header("🧪 Clinical Evidence Portal (GCI)")
-if search_query and not gci_df.empty:
-    st.success(f"Trovate {len(gci_df)} evidenze per '{search_query}'")
-    st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type', 'Key_Results_PFS']], use_container_width=True)
-elif search_query:
-    st.warning("Nessuna evidenza clinica trovata.")
+p_odi, p_gci = st.columns(2)
+with p_odi:
+    st.header("💊 Therapeutics (ODI)")
+    if not odi_df.empty:
+        st.dataframe(odi_df[['Generic_Name', 'Drug_Class', 'Regulatory_Status_US']], use_container_width=True)
+with p_gci:
+    st.header("🧪 Clinical Trials (GCI)")
+    if not gci_df.empty:
+        st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type']], use_container_width=True)
 
-# --- FOOTER ---
 st.divider()
-st.caption("Disclaimer: This platform is for research purposes only (RUO). Data provided by AXON and GCI are for scientific analysis.")
-
+st.caption("MAESTRO Suite | Integration of AXON, GCI, ODI, PMI | RUO")
