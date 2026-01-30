@@ -38,8 +38,18 @@ st.sidebar.markdown("### 🔍 Smart Search & Hub Focus")
 search_query = st.sidebar.text_input("Cerca Target (es. KRAS)", "").strip().upper()
 st.sidebar.warning("⚠️ **Research Use Only**\n\nNot for use in diagnostic or therapeutic procedures.")
 
-# --- 4. LOGICA DI FILTRO ---
+# --- 4. LOGICA DI FILTRO E CARICAMENTO CLINICO ---
+gci_df = pd.DataFrame() # Inizializziamo vuoto per evitare errori
+
 if search_query and not df.empty:
+    # 1. Carichiamo i dati clinici GCI PRIMA di tutto il resto
+    try:
+        res_gci = supabase.table("GCI_clinical_trials").select("*").ilike("Primary_Biomarker", f"%{search_query}%").execute()
+        gci_df = pd.DataFrame(res_gci.data)
+    except Exception:
+        gci_df = pd.DataFrame()
+
+    # 2. Filtro per Grafico e Ragnatela
     all_targets = df['target_id'].tolist()
     if search_query in all_targets:
         idx = all_targets.index(search_query)
@@ -52,15 +62,16 @@ else:
     filtered_df = df[(df['initial_score'] >= min_sig) & (df['toxicity_index'] <= max_t)] if not df.empty else df
 
 # --- 5. OPERA DIRECTOR (INTELLIGENCE HUB) ---
+st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
+
 if search_query and not df.empty:
     target_data = df[df['target_id'].str.upper() == search_query]
     if not target_data.empty:
         row = target_data.iloc[0]
         
-        # Titolo della Sezione
         st.markdown(f"## 🎼 Opera Director: {search_query}")
         
-        # Prima riga: Il Cuore della Meccanica (5 colonne)
+        # Prima riga: Meccanica & Sicurezza
         st.markdown("##### ⚙️ Meccanica & Sicurezza")
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
         r1_c1.metric("OMI (Biomarker)", "DETECTED")
@@ -69,7 +80,7 @@ if search_query and not df.empty:
         r1_c4.metric("TMI (Tossicità)", f"{row['toxicity_index']:.2f}", delta_color="inverse")
         r1_c5.metric("CES (Efficiency)", f"{row['ces_score']:.2f}")
 
-        # Seconda riga: Il Contesto & Ambiente (5 colonne)
+        # Seconda riga: Ambiente & Host
         st.markdown("##### 🌍 Ambiente & Host")
         r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
         r2_c1.metric("BCI (Bio-cost.)", "OPTIMAL")
@@ -77,17 +88,17 @@ if search_query and not df.empty:
         r2_c3.metric("EVI (Ambiente)", "LOW RISK")
         r2_c4.metric("MBI (Microbiota)", "RESILIENT")
         
-        # Check GCI reale per l'ultima casella
-        res_gci = supabase.table("GCI_clinical_trials").select("Phase").ilike("Primary_Biomarker", f"%{search_query}%").execute()
-        phase = res_gci.data[0]['Phase'] if res_gci.data else "PRE-CLIN"
+        # Fase clinica dal gci_df caricato sopra
+        phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "PRE-CLIN"
         r2_c5.metric("GCI (Clinica)", phase)
 
-        # Riga Report (Piccola e discreta)
+        # Export Report
         st.write("")
         report_text = f"OPERA DIRECTOR REPORT: {search_query}\nScore: {row['initial_score']}\nPhase: {phase}"
-        st.download_button("💾 Export Opera Data", report_text, file_name=f"Opera_{search_query}.txt", use_container_width=False)
+        st.download_button("💾 Export Opera Data", report_text, file_name=f"Opera_{search_query}.txt")
         st.divider()
 
+st.markdown(f"**Focus Mode:** {search_query if search_query else 'Global View'}")
 
 # --- 6. GRAFICI AXON ---
 col_bar, col_rank = st.columns([2, 1])
@@ -108,6 +119,7 @@ if not filtered_df.empty:
     for _, r in filtered_df.iterrows():
         is_f = r['target_id'].upper() == search_query
         G.add_node(r['target_id'], size=float(r['initial_score']) * (40 if is_f else 25), color=float(r['toxicity_index']))
+    
     nodes = list(G.nodes())
     if search_query in nodes:
         for n in nodes:
@@ -132,13 +144,20 @@ if not filtered_df.empty:
                           xaxis=dict(showgrid=False, zeroline=False, showticklabels=False), yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
     st.plotly_chart(fig_net, use_container_width=True)
 
-# --- 8. GCI PORTAL ---
+# --- 8. GCI PORTAL (RIPARATO) ---
 st.divider()
 st.header("🧪 Clinical Evidence Portal (GCI)")
 if search_query and not gci_df.empty:
-    st.dataframe(gci_df[['Canonical_Title', 'Phase', 'Cancer_Type', 'Key_Results_PFS']], use_container_width=True)
+    st.success(f"Visualizzazione dati clinici per: {search_query}")
+    # Seleziona solo le colonne esistenti per evitare errori di visualizzazione
+    cols_to_show = ['Canonical_Title', 'Phase', 'Cancer_Type', 'Key_Results_PFS']
+    available_cols = [c for c in cols_to_show if c in gci_df.columns]
+    st.dataframe(gci_df[available_cols], use_container_width=True)
+elif search_query:
+    st.info(f"Nessuna evidenza clinica trovata in GCI per '{search_query}'.")
+else:
+    st.info("💡 Digita un biomarker nella barra laterale per caricare i trial clinici.")
 
 # --- FOOTER ---
 st.divider()
 st.caption("Disclaimer: This platform is for research purposes only (RUO). Data provided by AXON and GCI are for scientific analysis.")
-
