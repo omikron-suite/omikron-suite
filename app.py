@@ -7,7 +7,7 @@ import plotly.express as px
 from datetime import datetime
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="MAESTRO Omikron Suite v20.1", layout="wide")
+st.set_page_config(page_title="MAESTRO Omikron Suite v20.6", layout="wide")
 
 # --- 2. CONNESSIONE ---
 URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
@@ -33,20 +33,20 @@ df = load_axon()
 # --- 3. SIDEBAR ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Omikron Control Center")
-st.sidebar.caption("v20.1 Gold Build | PRO")
+st.sidebar.caption("v20.6 Platinum Build | 2026")
 
-min_sig = st.sidebar.slider("Soglia Minima VTG", 0.0, 3.0, 0.8, help="Vitality Gene Score: intensità del segnale biologico rilevato.")
-max_t = st.sidebar.slider("Limite Tossicità TMI", 0.0, 1.0, 0.8, help="Toxicity Management Index: soglia massima di rischio tollerabile.")
+min_sig = st.sidebar.slider("Soglia Minima VTG", 0.0, 3.0, 0.8, help="Vitality Gene Score: intensità del segnale biologico.")
+max_t = st.sidebar.slider("Limite Tossicità TMI", 0.0, 1.0, 0.8, help="Toxicity Management Index: rischio tossicologico ammesso.")
 
 st.sidebar.divider()
 search_query = st.sidebar.text_input("🔍 Ricerca Hub Target", placeholder="es. KRAS").strip().upper()
 
-# --- NUOVO: DISCLAIMER SIDEBAR ---
+# DISCLAIMER SIDEBAR
 st.sidebar.markdown("""
 <div style="background-color: #1a1a1a; padding: 12px; border-radius: 8px; border-left: 4px solid #ff4b4b; margin-top: 10px;">
     <p style="font-size: 0.75rem; color: #ff4b4b; font-weight: bold; margin-bottom: 5px;">⚠️ RUO STATUS</p>
     <p style="font-size: 0.7rem; color: #aaa; text-align: justify; line-height: 1.2;">
-        Uso esclusivo di ricerca. I dati algoritmici non costituiscono parere clinico.
+        Uso esclusivo di ricerca (RUO). I dati non costituiscono parere medico o clinico.
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -64,7 +64,7 @@ if search_query and not df.empty:
         odi_df = pd.DataFrame(res_odi.data or [])
     except: pass
 
-# --- 5. UI: OPERA DIRECTOR & ADVANCED INFO ---
+# --- 5. UI: OPERA DIRECTOR ---
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 if search_query and not df.empty:
@@ -73,36 +73,29 @@ if search_query and not df.empty:
         row = target_data.iloc[0]
         st.markdown(f"## 🎼 Opera Director: {search_query}")
         
-        # Grid Parametri Compatta
         st.markdown(f"""
         <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
-            <div title="OMI: Omikron Molecular Identification" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
+            <div title="OMI: Identificazione molecolare" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
                 <span style="font-size: 0.7rem; color: #aaa;">OMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">DETECTED</span>
             </div>
-            <div title="SMI: Synergistic Map Index" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #6f42c1; text-align: center;">
+            <div title="SMI: Connessioni Pathway" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #6f42c1; text-align: center;">
                 <span style="font-size: 0.7rem; color: #aaa;">SMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(pmi_df)} Linked</span>
             </div>
-            <div title="ODI: Omikron Drug Index" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #ffc107; text-align: center;">
+            <div title="ODI: Farmaci/Molecole" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #ffc107; text-align: center;">
                 <span style="font-size: 0.7rem; color: #aaa;">ODI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(odi_df)} Items</span>
             </div>
-            <div title="TMI: Toxicity Management Index" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #dc3545; text-align: center;">
+            <div title="TMI: Indice Tossicità" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #dc3545; text-align: center;">
                 <span style="font-size: 0.7rem; color: #aaa;">TMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{row['toxicity_index']:.2f}</span>
             </div>
-            <div title="CES: Combined Efficiency Score" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #28a745; text-align: center;">
+            <div title="CES: Efficienza Combinata" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #28a745; text-align: center;">
                 <span style="font-size: 0.7rem; color: #aaa;">CES</span><br><span style="font-size: 1.2rem; font-weight: bold;">{row['ces_score']:.2f}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        c_bio, c_clin = st.columns(2)
-        with c_bio:
-            st.warning(f"**🧬 Biological Description L0:**\n\n{row.get('description_l0', 'Analisi funzionale del target in corso: nodo critico per la segnalazione cellulare.')}")
-        with c_clin:
-            phase = gci_df['Phase'].iloc[0] if not gci_df.empty else "N/D"
-            st.success(f"**🧪 Clinical Intelligence GCI:**\n\nAvanzamento: Phase {phase}. {len(gci_df)} trial attivi rilevati.")
+        st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Analisi funzionale del target in corso: rilevato nodo critico per la segnalazione cellulare.')}")
 
-        full_report = f"MAESTRO v20.1 FINAL REPORT\nTarget: {search_query}\nDate: {datetime.now()}\n\n"
-        full_report += f"Bio Description: {row.get('description_l0', 'N/A')}\nTrials: {len(gci_df)}"
+        full_report = f"MAESTRO v20.6 REPORT\nTarget: {search_query}\nDate: {datetime.now()}"
         st.download_button("📥 Esporta Full Intelligence (.txt)", full_report, file_name=f"MAESTRO_{search_query}.txt")
 
 # --- 6. RAGNATELA & RANKING ---
@@ -111,6 +104,7 @@ filtered_df = df[df["target_id"].str.contains(search_query, na=False)] if search
 
 if not filtered_df.empty:
     st.subheader("🕸️ Network Interaction Map")
+    
     G = nx.Graph()
     for _, r in filtered_df.iterrows():
         tid = r["target_id"]; is_f = (tid == search_query)
@@ -119,8 +113,6 @@ if not filtered_df.empty:
     if search_query in nodes:
         for n in nodes:
             if n != search_query: G.add_edge(search_query, n)
-    elif len(nodes) > 1:
-        for i in range(len(nodes) - 1): G.add_edge(nodes[i], nodes[i + 1])
     
     pos = nx.spring_layout(G, k=1.2, seed=42)
     edge_x, edge_y = [], []
@@ -140,50 +132,69 @@ if not filtered_df.empty:
     st.plotly_chart(fig_net, use_container_width=True)
 
     st.subheader("📊 Hub Signal Ranking")
+    
     fig_bar = px.bar(filtered_df.sort_values("initial_score", ascending=True).tail(15), 
                      x="initial_score", y="target_id", orientation='h',
                      color="toxicity_index", color_continuous_scale="RdYlGn_r", template="plotly_dark")
-    fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
+    fig_bar.update_layout(height=350, margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# --- 7. EXPLANATORY SECTION ---
+# --- 7. HUB INTELLIGENCE DESK (LISTATI COMPLETI SOTTO IL RANKING) ---
+if search_query:
+    st.divider()
+    st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
+    c_odi, c_gci, c_pmi = st.columns(3)
+
+    with c_odi:
+        st.markdown(f"### 💊 Therapeutics (ODI: {len(odi_df)})")
+        if not odi_df.empty:
+            for _, r in odi_df.iterrows():
+                with st.expander(f"**{r.get('Generic_Name', 'N/D')}**"):
+                    st.write(f"**Classe:** {r.get('Drug_Class', 'N/D')}")
+                    st.write(f"**Meccanismo:** {r.get('Description_L0', 'Dettagli non disponibili.')}")
+                    st.caption(f"Status: {r.get('Regulatory_Status_US', 'N/D')}")
+        else: st.info("Nessun item ODI trovato.")
+
+    with c_gci:
+        st.markdown(f"### 🧪 Clinical Trials (GCI: {len(gci_df)})")
+        if not gci_df.empty:
+            for _, r in gci_df.iterrows():
+                with st.expander(f"**Phase {r.get('Phase', 'N/D')} Trial**"):
+                    st.write(f"**ID:** {r.get('NCT_Number', 'N/D')}")
+                    st.write(f"**Titolo:** {r.get('Canonical_Title', 'Dettaglio non presente.')}")
+        else: st.info("Nessun trial GCI trovato.")
+
+    with c_pmi:
+        st.markdown(f"### 🧬 Pathways (PMI: {len(pmi_df)})")
+        if not pmi_df.empty:
+            for _, r in pmi_df.iterrows():
+                with st.expander(f"**{r.get('Canonical_Name', 'N/D')}**"):
+                    st.write(f"**Dettaglio:** {r.get('Description_L0', 'Dettagli non disponibili.')}")
+        else: st.info("Nessun pathway PMI trovato.")
+
+# --- 8. FOOTER & DISCLAIMER ---
 st.divider()
 st.subheader("📚 MAESTRO Intelligence Repository")
 exp1, exp2, exp3 = st.columns(3)
-
 with exp1:
     with st.expander("🛡️ AXON Intelligence (OMI/BCI)"):
-        st.write("""
-        - **OMI (Omikron Molecular Identification):** Analisi algoritmica che conferma l'esistenza di firme molecolari rilevanti nel target.
-        - **BCI (Biological Cost Index):** Valutazione della pressione metabolica e del dispendio energetico cellulare associato al target.
-        """)
+        st.write("OMI: Target Detection Hub. BCI: Biological Cost Index.")
 with exp2:
     with st.expander("💊 ODI & PMI Systems"):
-        st.write("""
-        - **ODI (Omikron Drug Index):** Catalogo centralizzato di molecole approvate, farmaci sperimentali e relativi meccanismi di interazione.
-        - **PMI (Pathway Map Index):** Mappatura delle reti biochimiche attive e delle cascate di segnalazione intracellulare.
-        """)
+        st.write("ODI: Database Farmaceutico. PMI: Mappatura Pathway.")
 with exp3:
     with st.expander("🧪 GCI & TMI (Clinical/Safety)"):
-        st.write("""
-        - **GCI (Genomic Clinical Index):** Monitoraggio in tempo reale degli studi clinici registrati e delle fasi di sviluppo farmacologico.
-        - **TMI (Toxicity Index):** Indice predittivo della tossicità sistemica, basato sulla distribuzione dell'espressione genica negli organi vitali.
-        """)
+        st.write("GCI: Monitoraggio Trial Clinici. TMI: Toxicity Index.")
 
-# --- 8. FOOTER & DISCLAIMER CENTRALE ---
-st.divider()
 st.markdown(f"""
-<div style="background-color: #0e1117; padding: 25px; border-radius: 12px; border: 1px solid #333; text-align: center; max-width: 900px; margin: 0 auto;">
+<div style="background-color: #0e1117; padding: 25px; border-radius: 12px; border: 1px solid #333; text-align: center; max-width: 900px; margin: 0 auto; margin-top: 20px;">
     <h4 style="color: #ff4b4b; margin-top: 0;">⚠️ DISCLAIMER SCIENTIFICO E LEGALE</h4>
     <p style="font-size: 0.8rem; color: #888; text-align: justify; line-height: 1.5;">
-        <b>MAESTRO Omikron Suite</b> è uno strumento di analisi computazionale destinato esclusivamente ad uso di <b>Ricerca (Research Use Only - RUO)</b>. 
-        Le informazioni presentate non devono essere interpretate come diagnosi, parere medico o raccomandazione terapeutica. I punteggi (OMI, TMI, CES) 
-        sono generati da modelli statistici basati sui database AXON, ODI, PMI e GCI e devono essere validati tramite procedure sperimentali standard. 
-        Omikron Project declina ogni responsabilità per decisioni basate sui risultati di questa piattaforma.
+        <b>MAESTRO Omikron Suite</b> è destinato esclusivamente ad uso di ricerca (RUO). 
+        Le analisi generate non sostituiscono pareri medici. I dati riflettono lo stato attuale dei database Omikron.
     </p>
     <p style="font-size: 0.75rem; color: #444; margin-top: 15px;">
-        MAESTRO v20.1 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
+        MAESTRO v20.6 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
     </p>
 </div>
-<br>
 """, unsafe_allow_html=True)
