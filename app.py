@@ -33,6 +33,10 @@ if not check_password():
 
 
 
+
+
+
+
 import streamlit as st
 from supabase import create_client
 import pandas as pd
@@ -59,6 +63,9 @@ def load_data():
     return df
 
 df = load_data()
+
+
+
 
 # --- SIDEBAR DI CONTROLLO ---
 st.sidebar.header("Parametri VTG Gate")
@@ -136,6 +143,9 @@ st.subheader("🕸️ Network Interaction Map (AXON Web)")
 # ... (lo caricheremo nel file completo su GitHub)
 
 
+
+
+
 # --- CODICE AGGIORNATO PER LA RAGNATELA (AXON Web) ---
 st.divider()
 st.subheader("🕸️ Network Interaction Map (AXON Web)")
@@ -198,5 +208,52 @@ else:
 
 
 
+# ... (fine del codice della ragnatela) ...
+    st.plotly_chart(fig_network, use_container_width=True)
+
+    # --- AGGIUNGI DA QUI ---
+    # Se l'utente ha cercato un target, mostriamo i dati GCI della tabella clinical_trials
+    if search_query:
+        st.divider()
+        st.header(f"📑 Evidence Report: {search_query}")
+        
+        try:
+            # Query alla nuova tabella clinical_trials
+            # Cerchiamo il biomarker sia in Primary_Biomarker che in Target_Gene_Variant
+            clinical_res = supabase.table("clinical_trials").select("*").or_(
+                f"Primary_Biomarker.ilike.%{search_query}%,Target_Gene_Variant.ilike.%{search_query}%"
+            ).execute()
+            
+            trials = pd.DataFrame(clinical_res.data)
+            
+            if not trials.empty:
+                # Top Metrics
+                m1, m2, m3, m4 = st.columns(4)
+                with m1:
+                    st.metric("Trial Totali", len(trials))
+                with m2:
+                    # Calcolo Hazard Ratio Medio se presente
+                    hr_avg = pd.to_numeric(trials['OS_HR'], errors='coerce').mean()
+                    st.metric("Avg OS Hazard Ratio", f"{hr_avg:.2f}" if not pd.isna(hr_avg) else "N/A")
+                with m3:
+                    st.metric("Fase Prevalente", trials['Phase'].mode()[0] if 'Phase' in trials.columns else "N/A")
+                with m4:
+                    st.metric("Practice Changing", len(trials[trials['Practice_Changing'] == 'Yes']) if 'Practice_Changing' in trials.columns else "0")
+
+                # Tabella dei Risultati Clinici
+                st.subheader("Dettaglio Studi Clinici (GCI Database)")
+                st.dataframe(
+                    trials[['Canonical_Title', 'Phase', 'Year', 'Cancer_Type', 'Key_Results_PFS', 'Main_Toxicities']], 
+                    use_container_width=True
+                )
+            else:
+                st.info(f"Nessuna evidenza clinica trovata nel database GCI per '{search_query}'.")
+                
+        except Exception as e:
+            st.error(f"Errore di collegamento con clinical_trials: {e}")
+    # --- FINE AGGIUNTA ---
+
+else:
+    st.warning("⚠️ Nessun target corrisponde ai filtri selezionati.")
 
 
