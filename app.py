@@ -191,21 +191,21 @@ else:
 colore_finale = "#00d4ff" if val_ces > 0.5 else "#888888"
 
 # --- IL NUOVO CRUSCOTTO COLORATO ---
-st.markdown(f"""
-<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;">
-    
-    <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_box}; text-align: center;">
-        <span style="font-size: 0.7rem; color: {colore_box}; font-weight: bold;">TMI (RISK)</span><br>
-        <span style="font-size: 1.2rem; font-weight: bold; color: {colore_box};">{val_tmi:.2f}</span>
-    </div>
+        st.markdown(f"""
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;">
+        
+            <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_box}; text-align: center;">
+                <span style="font-size: 0.7rem; color: {colore_box}; font-weight: bold;">TMI (RISK)</span><br>
+                <span style="font-size: 1.2rem; font-weight: bold; color: {colore_box};">{val_tmi:.2f}</span>
+            </div>
 
-    <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_finale}; text-align: center;">
-        <span style="font-size: 0.7rem; color: #aaa;">CES (FINAL)</span><br>
-        <span style="font-size: 1.2rem; font-weight: bold; color: {colore_finale};">{val_ces:.2f}</span>
-    </div>
+            <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_finale}; text-align: center;">
+                <span style="font-size: 0.7rem; color: #aaa;">CES (FINAL)</span><br>
+                <span style="font-size: 1.2rem; font-weight: bold; color: {colore_finale};">{val_ces:.2f}</span>
+            </div>
 
-</div>
-""", unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
         
             st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Functional target analysis in progress: critical signaling hub detected.')}")
 
@@ -515,6 +515,7 @@ if not df.empty:
     
     st.plotly_chart(fig_colori, use_container_width=True)
     st.info("💡 Legenda: Più il punto tende al VERDE, più il target è sicuro per l'uso clinico.")
+
 
 
 
