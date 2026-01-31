@@ -166,35 +166,8 @@ else:
             row = target_data.iloc[0]
             st.markdown(f"## 🎼 Opera Director: {search_query}")
 
-           # --- CALCOLO COLORI DINAMICI ---
-            # Verde se TMI < 0.3, Giallo se < 0.6, Rosso se > 0.6
-            tmi_val = row['toxicity_index']
-            tmi_color = "#28a745" if tmi_val < 0.3 else "#ffc107" if tmi_val < 0.6 else "#dc3545"
-            
-            # Azzurro per il punteggio finale
-            ces_color = "#00d4ff" if row['ces_score'] > 0.5 else "#888"
-
             st.markdown(f"""
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
-                <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
-                    <span style="font-size: 0.7rem; color: #aaa;">OMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">DETECTED</span>
-                </div>
-                <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #6f42c1; text-align: center;">
-                    <span style="font-size: 0.7rem; color: #aaa;">SMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(pmi_df)} Linked</span>
-                </div>
-                <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #ffc107; text-align: center;">
-                    <span style="font-size: 0.7rem; color: #aaa;">ODI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(odi_df)} Items</span>
-                </div>
-                <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {tmi_color}; text-align: center;">
-                    <span style="font-size: 0.7rem; color: {tmi_color}; font-weight: bold;">TMI (RISK)</span><br>
-                    <span style="font-size: 1.2rem; font-weight: bold; color: {tmi_color};">{row['toxicity_index']:.2f}</span>
-                </div>
-                <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {ces_color}; text-align: center;">
-                    <span style="font-size: 0.7rem; color: #aaa;">CES (FINAL)</span><br>
-                    <span style="font-size: 1.2rem; font-weight: bold; color: {ces_color};">{row['ces_score']:.2f}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
                 <div title="OMI: Molecular Identification" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
                     <span style="font-size: 0.7rem; color: #aaa;">OMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">DETECTED</span>
                 </div>
@@ -486,6 +459,15 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
+
+
+
+
+
+
+
+
 # --- SISTEMA COLORI MAESTRO (INCOLLA IN FONDO AL FILE) ---
 st.divider()
 st.subheader("📊 Analisi Cromatica Target (VTG vs TMI)")
@@ -512,6 +494,7 @@ if not df.empty:
     
     st.plotly_chart(fig_colori, use_container_width=True)
     st.info("💡 Legenda: Più il punto tende al VERDE, più il target è sicuro per l'uso clinico.")
+
 
 
 
