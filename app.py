@@ -105,30 +105,34 @@ gci_df, pmi_df, odi_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 st.title("🛡️ MAESTRO: Omikron Orchestra Suite")
 
 
-# --- 6. NETWORK MAP ---
+# --- 6. NETWORK MAP & RANKING ---
 st.divider()
 
-if df.empty or "error" in df.columns:
+if df.empty or ("error" in df.columns):
     st.stop()
 
+# Hub Mode: network = hub + neighbors
 if search_query:
     neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
     hub_df = df[df["target_id"] == search_query]
-    filtered_df = pd.concat([hub_df, neighbors_df], ignore_index=True)
+    if not hub_df.empty and not neighbors_df.empty:
+        filtered_df = pd.concat([hub_df, neighbors_df], ignore_index=True)
+    else:
+        filtered_df = hub_df
 else:
-    filtered_df = df[
-        (df["initial_score"] >= min_sig) &
-        (df["toxicity_index"] <= max_t)
-    ]
+    filtered_df = df[(df["initial_score"] >= min_sig) & (df["toxicity_index"] <= max_t)]
 
 if not filtered_df.empty:
     st.subheader("🕸️ Network Interaction Map")
+    
+    
 
     G = nx.Graph()
 
+    # Nodes
     for _, r in filtered_df.iterrows():
         tid = r["target_id"]
-        is_hub = (tid == search_query)
+        is_hub = bool(search_query) and (tid == search_query)
         G.add_node(
             tid,
             size=float(r["initial_score"]) * (70 if is_hub else 35),
@@ -138,9 +142,14 @@ if not filtered_df.empty:
 
     nodes = list(G.nodes())
 
-    for n in nodes:
-        if search_query and n != search_query:
-            G.add_edge(search_query, n)
+    # Edges
+    if search_query and search_query in nodes:
+        for n in nodes:
+            if n != search_query:
+                G.add_edge(search_query, n)
+    elif len(nodes) > 1:
+        for i in range(len(nodes) - 1):
+            G.add_edge(nodes[i], nodes[i + 1])
 
     pos = nx.spring_layout(G, k=1.1, seed=42)
 
@@ -148,14 +157,12 @@ if not filtered_df.empty:
     for a, b in G.edges():
         x0, y0 = pos[a]
         x1, y1 = pos[b]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
 
     fig_net = go.Figure()
-
     fig_net.add_trace(go.Scatter(
-        x=edge_x, y=edge_y,
-        mode="lines",
+        x=edge_x, y=edge_y, mode="lines",
         line=dict(color="#444", width=0.9),
         hoverinfo="none"
     ))
@@ -171,12 +178,9 @@ if not filtered_df.empty:
             size=[G.nodes[n]["size"] for n in nodes],
             color=[G.nodes[n]["color"] for n in nodes],
             colorscale="RdYlGn_r",
-            cmin=0.0,      # <<< UNICA MODIFICA
-            cmax=1.0,      # <<< UNICA MODIFICA
             showscale=True,
-            colorbar=dict(title="TMI"),
             line=dict(
-                width=[3 if G.nodes[n]["is_hub"] else 1 for n in nodes],
+                width=[3 if G.nodes[n].get("is_hub") else 1 for n in nodes],
                 color="white"
             )
         ),
@@ -190,10 +194,11 @@ if not filtered_df.empty:
         plot_bgcolor="rgba(0,0,0,0)",
         height=500
     )
-
     st.plotly_chart(fig_net, use_container_width=True)
 
     st.subheader("📊 Hub Signal Ranking")
+    
+    
 
     fig_bar = px.bar(
         filtered_df.sort_values("initial_score", ascending=True).tail(15),
@@ -202,9 +207,47 @@ if not filtered_df.empty:
         orientation="h",
         color="toxicity_index",
         color_continuous_scale="RdYlGn_r",
-        range_color=(0.0, 1.0),
         template="plotly_dark"
     )
-
     fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig_bar, use_container_width=True)
+else:
+    st.info("No data available with current filters.")
+
+# --- 7. HUB INTELLIGENCE DESK ---
+if search_query:
+    st.divider()
+    st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
+    c_odi, c_gci, c_pmi = st.columns(3)
+
+    with c_odi:
+        st.markdown(f"### 💊 Therapeutics (ODI: {len(odi_df)})")
+        if not odi_df.empty:
+            for _, r in odi_df.iterrows():
+                with st.expander(f"**{r.get('Generic_Name', 'N/A')}**"):
+                    st.write(f"**Class:** {r.get('Drug_Class', 'N/A')}")
+                    st.write(f"**Mechanism:** {r.get('Description_L0', 'Details not available.')}")
+                    st.caption(f"Status: {r.get('Regulatory_Status_US', 'N/A')}")
+        else:
+            st.info("No ODI items found.")
+
+    with c_gci:
+        st.markdown(f"### 🧪 Clinical Trials (GCI: {len(gci_df)})")
+        if not gci_df.empty:
+            for _, r in gci_df.iterrows():
+                with st.expander(f"**Phase {r.get('Phase', 'N/A')} Trial**"):
+                    st.write(f"**ID:** {r.get('NCT_Number', 'N/A')}")
+                    st.write(f"**Title:** {r.get('Canonical_Title', 'Details not available.')}")
+        else:
+            st.info("No GCI trials found.")
+
+    with c_pmi:
+        st.markdown(f"### 🧬 Pathways (PMI: {len(pmi_df)})")
+        if not pmi_df.empty:
+            for _, r in pmi_df.iterrows():
+                with st.expander(f"**{r.get('Canonical_Name', 'N/A')}**"):
+                    st.write(f"**Detail:** {r.get('Description_L0', 'Details not available.')}")
+        else:
+            st.info("No PMI pathways found.")
+
+
