@@ -178,6 +178,8 @@ if not filtered_df.empty:
             size=[G.nodes[n]["size"] for n in nodes],
             color=[G.nodes[n]["color"] for n in nodes],
             colorscale="RdYlGn_r",
+            cmin=0.0,   # <-- RIPRISTINO COERENZA COLORI (TMI 0..1)
+            cmax=1.0,   # <-- RIPRISTINO COERENZA COLORI (TMI 0..1)
             showscale=True,
             line=dict(
                 width=[3 if G.nodes[n].get("is_hub") else 1 for n in nodes],
@@ -207,6 +209,7 @@ if not filtered_df.empty:
         orientation="h",
         color="toxicity_index",
         color_continuous_scale="RdYlGn_r",
+        range_color=(0.0, 1.0),  # <-- RIPRISTINO COERENZA COLORI (TMI 0..1)
         template="plotly_dark"
     )
     fig_bar.update_layout(height=400, margin=dict(l=0, r=0, t=20, b=0))
@@ -276,7 +279,3 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
