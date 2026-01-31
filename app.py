@@ -250,4 +250,33 @@ if search_query:
         else:
             st.info("No PMI pathways found.")
 
+# --- 8. FOOTER & DISCLAIMER ---
+st.divider()
+st.subheader("📚 MAESTRO Intelligence Repository")
+exp1, exp2, exp3 = st.columns(3)
+with exp1:
+    with st.expander("🛡️ AXON Intelligence (OMI/BCI)"):
+        st.write("OMI: Target Detection Hub. BCI: Biological Cost Index.")
+with exp2:
+    with st.expander("💊 ODI & PMI Systems"):
+        st.write("ODI: Pharmaceutical Database. PMI: Pathway Mappings.")
+with exp3:
+    with st.expander("🧪 GCI & TMI (Clinical/Safety)"):
+        st.write("GCI: Clinical Trial Monitoring. TMI: Toxicity Index.")
+
+st.markdown(f"""
+<div style="background-color: #0e1117; padding: 25px; border-radius: 12px; border: 1px solid #333; text-align: center; max-width: 900px; margin: 0 auto; margin-top: 20px;">
+    <h4 style="color: #ff4b4b; margin-top: 0;">⚠️ SCIENTIFIC AND LEGAL DISCLAIMER</h4>
+    <p style="font-size: 0.8rem; color: #888; text-align: justify; line-height: 1.5;">
+        <b>MAESTRO Omikron Suite</b> is intended exclusively for Research Use Only (RUO). 
+        Generated analyses do not replace medical advice. Data reflects the current state of Omikron databases.
+    </p>
+    <p style="font-size: 0.75rem; color: #444; margin-top: 15px;">
+        MAESTRO v20.6 | © 2026 Omikron Orchestra Project | Powered by AXON Intelligence
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+
+
 
