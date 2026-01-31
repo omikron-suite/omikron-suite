@@ -167,46 +167,25 @@ else:
             st.markdown(f"## 🎼 Opera Director: {search_query}")
 
             st.markdown(f"""
-          # --- SISTEMA DI COLORAZIONE DINAMICA MAESTRO ---
-try:
-    # Convertiamo i valori in numeri per sicurezza
-    val_tmi = float(row.get('toxicity_index', 0))
-    val_ces = float(row.get('ces_score', 0))
-except:
-    val_tmi = 0.5
-    val_ces = 0.5
-
-# LOGICA SEMAFORO:
-# 0.0 - 0.30 -> VERDE (Sicuro)
-# 0.31 - 0.60 -> GIALLO (Attenzione)
-# 0.61 - 1.00 -> ROSSO (Pericolo)
-if val_tmi <= 0.30:
-    colore_box = "#28a745" # Verde
-elif val_tmi <= 0.60:
-    colore_box = "#ffc107" # Giallo
-else:
-    colore_box = "#dc3545" # Rosso
-
-# Colore del Punteggio Finale (Azzurro Omikron)
-colore_finale = "#00d4ff" if val_ces > 0.5 else "#888888"
-
-# --- IL NUOVO CRUSCOTTO COLORATO ---
-        st.markdown(f"""
-        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;">
-        
-            <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_box}; text-align: center;">
-                <span style="font-size: 0.7rem; color: {colore_box}; font-weight: bold;">TMI (RISK)</span><br>
-                <span style="font-size: 1.2rem; font-weight: bold; color: {colore_box};">{val_tmi:.2f}</span>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
+                <div title="OMI: Molecular Identification" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">OMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">DETECTED</span>
+                </div>
+                <div title="SMI: Pathway Connection Index" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #6f42c1; text-align: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">SMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(pmi_df)} Linked</span>
+                </div>
+                <div title="ODI: Drugs/Molecules available" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #ffc107; text-align: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">ODI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{len(odi_df)} Items</span>
+                </div>
+                <div title="TMI: Toxicity Index" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #dc3545; text-align: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">TMI</span><br><span style="font-size: 1.2rem; font-weight: bold;">{row['toxicity_index']:.2f}</span>
+                </div>
+                <div title="CES: Combined Efficiency Score" style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid #28a745; text-align: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">CES</span><br><span style="font-size: 1.2rem; font-weight: bold;">{row['ces_score']:.2f}</span>
+                </div>
             </div>
+            """, unsafe_allow_html=True)
 
-            <div style="background: #111; padding: 12px; border-radius: 8px; border-top: 4px solid {colore_finale}; text-align: center;">
-                <span style="font-size: 0.7rem; color: #aaa;">CES (FINAL)</span><br>
-                <span style="font-size: 1.2rem; font-weight: bold; color: {colore_finale};">{val_ces:.2f}</span>
-            </div>
-
-        </div>
-        """, unsafe_allow_html=True)
-        
             st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Functional target analysis in progress: critical signaling hub detected.')}")
 
             # --- FIRST NEIGHBORS (Top-K) ---
@@ -479,50 +458,6 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-# --- SISTEMA COLORI MAESTRO (INCOLLA IN FONDO AL FILE) ---
-st.divider()
-st.subheader("📊 Analisi Cromatica Target (VTG vs TMI)")
-
-# Usiamo df (il database intero) per mostrare il confronto
-if not df.empty:
-    import plotly.express as px
-    
-    fig_colori = px.scatter(
-        df, 
-        x="initial_score", 
-        y="toxicity_index",
-        color="toxicity_index",
-        size="ces_score",
-        hover_name="target_id",
-        color_continuous_scale="RdYlGn_r", # Il gradiente Rosso-Giallo-Verde
-        labels={'initial_score': 'Potenza (VTG)', 'toxicity_index': 'Rischio (TMI)'},
-        template="plotly_dark"
-    )
-    
-    # Aggiungiamo zone di colore per rendere tutto intuitivo
-    fig_colori.add_hrect(y0=0, y1=0.3, fillcolor="green", opacity=0.1, annotation_text="ZONA SICURA")
-    fig_colori.add_hrect(y0=0.7, y1=1.0, fillcolor="red", opacity=0.1, annotation_text="ZONA TOSSICA")
-    
-    st.plotly_chart(fig_colori, use_container_width=True)
-    st.info("💡 Legenda: Più il punto tende al VERDE, più il target è sicuro per l'uso clinico.")
-
-
-
-
-
-
-
-
 
 
 
