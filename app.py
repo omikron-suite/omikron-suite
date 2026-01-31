@@ -240,21 +240,21 @@ st.plotly_chart(fig_colors, use_container_width=True)
             # --- FIRST NEIGHBORS (Top-K) ---
 neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
 
-            st.markdown("### 🔗 First Neighbors (Hub Context)")
-            if neighbors_df.empty:
-                st.info("No neighbors found with current filters. Try lowering VTG or increasing TMI.")
-            else:
-                # Compact Chips
-                chips = []
-                for _, r in neighbors_df.iterrows():
-                    chips.append(
-                        f"**{r['target_id']}** · CES {r['ces_score']:.2f} · "
-                        f"TMI {r['toxicity_index']:.2f} · VTG {r['initial_score']:.2f}"
-                    )
-                st.markdown("\n".join([f"- {c}" for c in chips]))
+st.markdown("### 🔗 First Neighbors (Hub Context)")
+if neighbors_df.empty:
+    st.info("No neighbors found with current filters. Try lowering VTG or increasing TMI.")
+else:
+    # Compact Chips
+    chips = []
+    for _, r in neighbors_df.iterrows():
+        chips.append(
+            f"**{r['target_id']}** · CES {r['ces_score']:.2f} · "
+            f"TMI {r['toxicity_index']:.2f} · VTG {r['initial_score']:.2f}"
+        )
+    st.markdown("\n".join([f"- {c}" for c in chips]))
 
-                show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
-                st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
+    show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
+    st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
 
 
 
@@ -507,6 +507,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
