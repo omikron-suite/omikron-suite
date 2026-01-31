@@ -459,6 +459,34 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# --- SISTEMA COLORI MAESTRO (INCOLLA IN FONDO AL FILE) ---
+st.divider()
+st.subheader("📊 Analisi Cromatica Target (VTG vs TMI)")
+
+# Usiamo df (il database intero) per mostrare il confronto
+if not df.empty:
+    import plotly.express as px
+    
+    fig_colori = px.scatter(
+        df, 
+        x="initial_score", 
+        y="toxicity_index",
+        color="toxicity_index",
+        size="ces_score",
+        hover_name="target_id",
+        color_continuous_scale="RdYlGn_r", # Il gradiente Rosso-Giallo-Verde
+        labels={'initial_score': 'Potenza (VTG)', 'toxicity_index': 'Rischio (TMI)'},
+        template="plotly_dark"
+    )
+    
+    # Aggiungiamo zone di colore per rendere tutto intuitivo
+    fig_colori.add_hrect(y0=0, y1=0.3, fillcolor="green", opacity=0.1, annotation_text="ZONA SICURA")
+    fig_colori.add_hrect(y0=0.7, y1=1.0, fillcolor="red", opacity=0.1, annotation_text="ZONA TOSSICA")
+    
+    st.plotly_chart(fig_colori, use_container_width=True)
+    st.info("💡 Legenda: Più il punto tende al VERDE, più il target è sicuro per l'uso clinico.")
+
+
 
 
 
