@@ -259,21 +259,21 @@ else:
 
 
 # --- ADVANCED INTELLIGENCE EXPORT (FULL ORCHESTRA VERSION) ---
-            st.markdown("### 📥 Intelligence Export")
+st.markdown("### 📥 Intelligence Export")
             
-            # 1. Prepare Data Blocks
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+# 1. Prepare Data Blocks
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Hub Core Metrics Block (AXON)
-            df_hub_core = pd.DataFrame([{
-                "SECTION": "1_HUB_CORE_METRICS",
-                "Target_ID": search_query,
-                "VTG_Score": row['initial_score'],
-                "TMI_Index": row['toxicity_index'],
-                "CES_Score": row['ces_score'],
-                "Biological_Description": row.get('description_l0', 'N/A'),
-                "Export_Date": timestamp
-            }])
+# Hub Core Metrics Block (AXON)
+df_hub_core = pd.DataFrame([{
+    "SECTION": "1_HUB_CORE_METRICS",
+    "Target_ID": search_query,
+    "VTG_Score": row['initial_score'],
+    "TMI_Index": row['toxicity_index'],
+    "CES_Score": row['ces_score'],
+    "Biological_Description": row.get('description_l0', 'N/A'),
+    "Export_Date": timestamp
+}])
 
             # Neighbors Block (Network context)
             neighbors_export = neighbors_df.copy()
@@ -507,6 +507,7 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
