@@ -56,25 +56,6 @@ URL = st.secrets.get("SUPABASE_URL", "https://zwpahhbxcugldxchiunv.supabase.co")
 KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_yrLrhe_iynvz_WdAE0jJ-A_qCR1VdZ1")
 supabase = create_client(URL, KEY)
 
-@st.cache_data(ttl=300)
-def load_data_orchestra():
-    try:
-        # Carica Registro
-        reg = supabase.table("target_registry").select("*").execute()
-        df_reg = pd.DataFrame(reg.data or [])
-        
-        # Carica Dati AXON
-        axon = supabase.table("axon_knowledge").select("*").execute()
-        df_axon = pd.DataFrame(axon.data or [])
-        
-        return df_reg, df_axon
-    except Exception as e:
-        st.error(f"Errore connessione: {e}")
-        return pd.DataFrame(), pd.DataFrame()
-
-df_reg, df_axon = load_data_orchestra()
-
-
 @st.cache_data(ttl=600)
 def load_axon():
     try:
@@ -98,7 +79,6 @@ def load_axon():
         return d
     except Exception as e:
         return pd.DataFrame({"error": [str(e)]})
-        
 
 def get_first_neighbors(df_all: pd.DataFrame, hub: str, k: int, min_sig: float, max_t: float) -> pd.DataFrame:
     """
@@ -208,72 +188,43 @@ else:
 
             st.warning(f"**🧬 Biological Description L0:** {row.get('description_l0', 'Functional target analysis in progress: critical signaling hub detected.')}")
 
-            # --- INIZIO BLOCCO COLORI MAESTRO ---
-            st.divider()
-            st.subheader("📊 Analisi Cromatica Target")
-
-# Assicuriamoci che i dati siano pronti per il colore
-# Il colore sarà basato sulla toxicity_index (TMI)
-# Rosso = Pericoloso, Verde = Sicuro
-
-            fig_colors = px.bar(
-                target_data, 
-                x="action_verb", 
-                y="initial_score",
-                color="toxicity_index", 
-                color_continuous_scale="RdYlGn_r", # La scala Rosso-Giallo-Verde invertita
-                range_color=[0, 1], # Definisce i confini della tossicità
-                labels={'toxicity_index': 'Rischio TMI', 'initial_score': 'Forza VTG', 'action_verb': 'Meccanismo'},
-                template="plotly_dark"
-            )
-
-# Rende il grafico più leggibile e professionale
-fig_colors.update_layout(
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    coloraxis_colorbar=dict(title="Safety Index")
-)
-
-st.plotly_chart(fig_colors, use_container_width=True)
-# --- FINE BLOCCO COLORI MAESTRO ---
-
             # --- FIRST NEIGHBORS (Top-K) ---
-neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
+            neighbors_df = get_first_neighbors(df, search_query, top_k, min_sig, max_t)
 
-st.markdown("### 🔗 First Neighbors (Hub Context)")
-if neighbors_df.empty:
-    st.info("No neighbors found with current filters. Try lowering VTG or increasing TMI.")
-else:
-    # Compact Chips
-    chips = []
-    for _, r in neighbors_df.iterrows():
-        chips.append(
-            f"**{r['target_id']}** · CES {r['ces_score']:.2f} · "
-            f"TMI {r['toxicity_index']:.2f} · VTG {r['initial_score']:.2f}"
-        )
-    st.markdown("\n".join([f"- {c}" for c in chips]))
+            st.markdown("### 🔗 First Neighbors (Hub Context)")
+            if neighbors_df.empty:
+                st.info("No neighbors found with current filters. Try lowering VTG or increasing TMI.")
+            else:
+                # Compact Chips
+                chips = []
+                for _, r in neighbors_df.iterrows():
+                    chips.append(
+                        f"**{r['target_id']}** · CES {r['ces_score']:.2f} · "
+                        f"TMI {r['toxicity_index']:.2f} · VTG {r['initial_score']:.2f}"
+                    )
+                st.markdown("\n".join([f"- {c}" for c in chips]))
 
-    show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
-    st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
+                show_cols = ["target_id", "initial_score", "toxicity_index", "ces_score"]
+                st.dataframe(neighbors_df[show_cols], use_container_width=True, hide_index=True)
 
 
 
 # --- ADVANCED INTELLIGENCE EXPORT (FULL ORCHESTRA VERSION) ---
-st.markdown("### 📥 Intelligence Export")
+            st.markdown("### 📥 Intelligence Export")
             
-# 1. Prepare Data Blocks
-timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 1. Prepare Data Blocks
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-# Hub Core Metrics Block (AXON)
-df_hub_core = pd.DataFrame([{
-    "SECTION": "1_HUB_CORE_METRICS",
-    "Target_ID": search_query,
-    "VTG_Score": row['initial_score'],
-    "TMI_Index": row['toxicity_index'],
-    "CES_Score": row['ces_score'],
-    "Biological_Description": row.get('description_l0', 'N/A'),
-    "Export_Date": timestamp
-}])
+            # Hub Core Metrics Block (AXON)
+            df_hub_core = pd.DataFrame([{
+                "SECTION": "1_HUB_CORE_METRICS",
+                "Target_ID": search_query,
+                "VTG_Score": row['initial_score'],
+                "TMI_Index": row['toxicity_index'],
+                "CES_Score": row['ces_score'],
+                "Biological_Description": row.get('description_l0', 'N/A'),
+                "Export_Date": timestamp
+            }])
 
             # Neighbors Block (Network context)
             neighbors_export = neighbors_df.copy()
@@ -507,11 +458,6 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
 
 
 
