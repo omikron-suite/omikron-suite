@@ -13,6 +13,7 @@ import io  # <--- AGGIUNGI QUESTA RIGA
 
 
 
+
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="MAESTRO Omikron Suite v2.6.2 build 2630012026", layout="wide")
 
@@ -308,8 +309,17 @@ if not filtered_df.empty:
     st.subheader("🕸️ Network Interaction Map")
     
     
-
     G = nx.Graph()
+
+    # --------- (CHANGE ONLY HERE) VTG -> node size (normalized), TMI -> color (explicit scale) ----------
+    vmin = float(filtered_df["initial_score"].min())
+    vmax = float(filtered_df["initial_score"].max())
+    vrng = max(vmax - vmin, 1e-9)
+
+    def vtg_to_size(v, is_hub=False):
+        # VTG -> size 18..55 (hub slightly larger)
+        base = 18 + (float(v) - vmin) / vrng * (55 - 18)
+        return base * (1.35 if is_hub else 1.0)
 
     # Nodes
     for _, r in filtered_df.iterrows():
@@ -317,10 +327,12 @@ if not filtered_df.empty:
         is_hub = bool(search_query) and (tid == search_query)
         G.add_node(
             tid,
-            size=float(r["initial_score"]) * (70 if is_hub else 35),
+            size=vtg_to_size(r["initial_score"], is_hub=is_hub),
             color=float(r["toxicity_index"]),
+            vtg=float(r["initial_score"]),
             is_hub=is_hub
         )
+    # ---------------------------------------------------------------------------------------------------
 
     nodes = list(G.nodes())
 
@@ -349,6 +361,7 @@ if not filtered_df.empty:
         hoverinfo="none"
     ))
 
+    # --------- (CHANGE ONLY HERE) ensure TMI scale and show VTG in hover ----------
     fig_net.add_trace(go.Scatter(
         x=[pos[n][0] for n in nodes],
         y=[pos[n][1] for n in nodes],
@@ -360,14 +373,19 @@ if not filtered_df.empty:
             size=[G.nodes[n]["size"] for n in nodes],
             color=[G.nodes[n]["color"] for n in nodes],
             colorscale="RdYlGn_r",
+            cmin=0.0,
+            cmax=1.0,
             showscale=True,
+            colorbar=dict(title="TMI"),
             line=dict(
                 width=[3 if G.nodes[n].get("is_hub") else 1 for n in nodes],
                 color="white"
             )
         ),
-        hovertemplate="<b>%{text}</b><extra></extra>"
+        customdata=[[G.nodes[n].get("vtg", None), G.nodes[n].get("color", None)] for n in nodes],
+        hovertemplate="<b>%{text}</b><br>VTG: %{customdata[0]:.2f}<br>TMI: %{customdata[1]:.2f}<extra></extra>"
     ))
+    # ---------------------------------------------------------------------------------------------------
 
     fig_net.update_layout(
         showlegend=False,
@@ -458,11 +476,3 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
