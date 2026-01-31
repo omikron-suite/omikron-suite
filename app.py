@@ -219,40 +219,60 @@ else:
 
 # --- 7. HUB INTELLIGENCE DESK ---
 if search_query:
-    st.divider()
-    st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
-    c_odi, c_gci, c_pmi = st.columns(3)
+    hub_row = df[df["target_id"] == search_query]
+    
+    if not hub_row.empty:
+        row = hub_row.iloc[0]
+        st.divider()
+        st.subheader(f"📂 Hub Intelligence Desk: {search_query}")
 
-    with c_odi:
-        st.markdown(f"### 💊 Therapeutics (ODI: {len(odi_df)})")
-        if not odi_df.empty:
-            for _, r in odi_df.iterrows():
-                with st.expander(f"**{r.get('Generic_Name', 'N/A')}**"):
-                    st.write(f"**Class:** {r.get('Drug_Class', 'N/A')}")
-                    st.write(f"**Mechanism:** {r.get('Description_L0', 'Details not available.')}")
-                    st.caption(f"Status: {r.get('Regulatory_Status_US', 'N/A')}")
-        else:
-            st.info("No ODI items found.")
+        # --- DYNAMIC COLOR LOGIC FOR METRICS ---
+        val_tmi = float(row.get('toxicity_index', 0))
+        val_ces = float(row.get('ces_score', 0))
+        
+        # Color Scale: Green (Safe) < 0.3 | Yellow (Caution) | Red (Danger) > 0.7
+        tmi_color = "#28a745" if val_tmi < 0.3 else "#dc3545" if val_tmi > 0.7 else "#ffc107"
+        ces_color = "#00d4ff" if val_ces > 0.5 else "#888888"
 
-    with c_gci:
-        st.markdown(f"### 🧪 Clinical Trials (GCI: {len(gci_df)})")
-        if not gci_df.empty:
-            for _, r in gci_df.iterrows():
-                with st.expander(f"**Phase {r.get('Phase', 'N/A')} Trial**"):
-                    st.write(f"**ID:** {r.get('NCT_Number', 'N/A')}")
-                    st.write(f"**Title:** {r.get('Canonical_Title', 'Details not available.')}")
-        else:
-            st.info("No GCI trials found.")
+        # --- METRIC BOXES (ENGLISH) ---
+        st.markdown(f"""
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 25px;">
+            <div style="background: #111; padding: 15px; border-radius: 8px; border-top: 4px solid #007bff; text-align: center;">
+                <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase;">OMI Status</span><br>
+                <span style="font-size: 1.1rem; font-weight: bold; color: white;">DETECTED</span>
+            </div>
+            <div style="background: #111; padding: 15px; border-radius: 8px; border-top: 4px solid #6f42c1; text-align: center;">
+                <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase;">SMI Links</span><br>
+                <span style="font-size: 1.1rem; font-weight: bold; color: white;">{len(neighbors_df) if 'neighbors_df' in locals() else 0}</span>
+            </div>
+            <div style="background: #111; padding: 15px; border-radius: 8px; border-top: 4px solid #fd7e14; text-align: center;">
+                <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase;">VTG Signal</span><br>
+                <span style="font-size: 1.1rem; font-weight: bold; color: white;">{row['initial_score']:.2f}</span>
+            </div>
+            <div style="background: #111; padding: 15px; border-radius: 8px; border-top: 4px solid {tmi_color}; text-align: center;">
+                <span style="font-size: 0.7rem; color: {tmi_color}; font-weight: bold; text-transform: uppercase;">TMI (Risk)</span><br>
+                <span style="font-size: 1.2rem; font-weight: bold; color: {tmi_color};">{val_tmi:.2f}</span>
+            </div>
+            <div style="background: #111; padding: 15px; border-radius: 8px; border-top: 4px solid {ces_color}; text-align: center;">
+                <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase;">CES (Final)</span><br>
+                <span style="font-size: 1.2rem; font-weight: bold; color: {ces_color};">{val_ces:.2f}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    with c_pmi:
-        st.markdown(f"### 🧬 Pathways (PMI: {len(pmi_df)})")
-        if not pmi_df.empty:
-            for _, r in pmi_df.iterrows():
-                with st.expander(f"**{r.get('Canonical_Name', 'N/A')}**"):
-                    st.write(f"**Detail:** {r.get('Description_L0', 'Details not available.')}")
-        else:
-            st.info("No PMI pathways found.")
+        # --- TARGET DESCRIPTION ---
+        st.info(f"**🧬 Biological Context:** {row.get('description_l0', 'No clinical description available for this hub.')}")
 
+        # --- EXPORT DATA BUTTON ---
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export Analysis to CSV",
+            data=csv,
+            file_name=f"MAESTRO_Export_{search_query}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
+
+    # ... Rest of your columns (c_odi, c_gci, c_pmi) ...
 # --- 8. FOOTER & DISCLAIMER ---
 st.divider()
 st.subheader("📚 MAESTRO Intelligence Repository")
@@ -279,3 +299,4 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
